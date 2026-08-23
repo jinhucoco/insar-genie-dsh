@@ -4,6 +4,12 @@ SBAS-InSAR 全链路 DSH 插件：`insar_run` / `insar_status` / `insar_template
 
 **开箱即用**：插件自带完整 SBAS 执行链（`assets/scripts/` 下载/配套数据工具 + `assets/experiment/` SARscape 五步 batch 与守护脚本）。安装插件后 `insar_run` / `insar_experiment` 自动使用内置脚本，**无需另装技能或手动传脚本路径**。
 
+## 脚本来源与同步（两仓约定）
+
+插件 `assets/scripts` + `assets/experiment` 里的 Python/bat 脚本**来自技能仓库 `jinhucoco/insar-genie`**（`scripts/` + `experiment/`），是其在插件的**发布副本**。
+
+> 脚本**唯一源**在技能仓库 `jinhucoco/insar-genie`；插件更新 these 副本时，改技能仓库脚本 → 同步复制到 `assets/` → 校验 MD5 一致。改脚本后需同步两仓，否则插件与技能版本漂移。
+
 ## 安装
 
 ```powershell
