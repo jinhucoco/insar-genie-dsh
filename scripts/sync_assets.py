@@ -31,10 +31,15 @@ MAPPING = [
 ]
 
 def md5(p: Path) -> str:
+    """内容 MD5：读取文本后规范化换行符（忽略 CRLF/LF 差异），避免跨平台误报。"""
     h = hashlib.md5()
-    with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
+    # 读文本，统一转成 \n 后再 hash（批处理/py 在 Windows=CRLF，Linux=LF）
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        text = p.read_bytes().decode("utf-8", errors="replace")
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    h.update(normalized.encode("utf-8"))
     return h.hexdigest()
 
 # Windows 终端默认 GBK，emoji/特殊字符会 UnicodeEncodeError，强制 utf-8 输出
