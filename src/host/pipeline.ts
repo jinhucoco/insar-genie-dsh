@@ -1,12 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { looksFromGridSize, getTemplate } from "./templates.js";
-import type { ConnectionGraphCheck, ExperimentParams, ParamsConsistencyCheck } from "../shared/types.js";
+import type { ConnectionGraphCheck, ExperimentParams, ParamsConsistencyCheck, TerrainType } from "../shared/types.js";
 
 /** 由 gridSize 推导多视：有地形用模板值（地形优先），否则 looksFromGridSize 兑底（30m→8:2 / 15m→4:1）。 */
 export function deriveLooks(gridSize: number, terrain?: string): { rgLooks: number; azLooks: number } {
   if (terrain) {
-    const t = getTemplate(terrain as never);
+    const t = getTemplate(terrain as TerrainType);
     return { rgLooks: t.rgLooks, azLooks: t.azLooks };
   }
   return looksFromGridSize(gridSize);
@@ -26,39 +26,77 @@ export function checkConnectionGraph(workDir: string): ConnectionGraphCheck {
   };
 }
 
-/** 运行期参数一致性校验：定位最新 PARAMETERS_INFO_*.xml，提取 key 与快照比对。 */
+/** 运行期参数一致性校验：定位匹配模块的最新 PARAMETERS_INFO_*.xml，提取 key 与快照比对。
+ *  @param workDir 工作目录（实验 tmp 下，含 PARAMETERS_INFO 落盘）
+ *  @param params  确认快照（key 与落盘 XML 的 tag 对应，小写下划线）
+ *  @param moduleKey 匹配模块名（如 'INTERFEROGRAM_GENERATION'）；可选，缺省扫全部
+ *  @returns 缺证（找不到 XML / 全部 key 未核实）时 passed=false, missingInfo=true —— 不静默通过。 */
 export function checkParamsConsistency(
   workDir: string,
   params: Partial<Record<string, unknown>>,
+  moduleKey?: string,
 ): ParamsConsistencyCheck {
-  const file = latestParamsInfo(workDir);
-  if (!file) return { mismatches: [], passed: true, message: "未找到 PARAMETERS_INFO_*.xml，跳过一致性校验（记录到 registry 待人工核）" };
+  const file = latestParamsInfo(workDir, moduleKey);
+  if (!file) {
+    return {
+      mismatches: [],
+      passed: false,
+      message: "未找到匹配的 PARAMETERS_INFO_*.xml，无法校验参数一致性（需人工核）",
+      missingInfo: true,
+      unverified: Object.keys(params),
+    };
+  }
   const xml = readFileSync(file, "utf8");
   const mismatches: { key: string; expected: unknown; actual: unknown }[] = [];
+  const unverified: string[] = [];
   for (const [key, expected] of Object.entries(params)) {
     const tag = key.toLowerCase();
     const m = new RegExp(`<${tag}>\\s*([^<]+?)\\s*</${tag}>`, "i").exec(xml);
-    if (!m) continue; // 该参数未落盘，跳过
+    if (!m) {
+      unverified.push(key); // 快照中但落盘未包含 —— 不判 mismatch，但记录
+      continue;
+    }
     const actual = m[1].trim();
     if (String(expected).toLowerCase() !== actual.toLowerCase()) {
       mismatches.push({ key, expected, actual });
     }
   }
+  // 全部 key 都无法核实 → 视为证缺失（不静默通过）
+  const totalKeys = Object.keys(params).length;
+  const allUnverified = totalKeys > 0 && mismatches.length === 0 && unverified.length === totalKeys;
   return {
     mismatches,
-    passed: mismatches.length === 0,
-    message: mismatches.length === 0
-      ? "运行参数与确认快照一致"
-      : `参数不一致：${mismatches.map((x) => `${x.key} 期望${x.expected} 实际${x.actual}`).join("; ")}`,
+    passed: mismatches.length === 0 && !allUnverified,
+    message: mismatches.length > 0
+      ? `参数不一致：${mismatches.map((x) => `${x.key} 期望${x.expected} 实际${x.actual}`).join("; ")}`
+      : allUnverified
+        ? `落盘 XML 无法核实任何确认参数（需人工核）：${unverified.join(", ")}`
+        : `运行参数与确认快照一致${unverified.length > 0 ? `（${unverified.length} 项未核实：${unverified.join(", ")}）` : ""}`,
+    missingInfo: allUnverified,
+    unverified,
   };
 }
 
-/** 定位工作目录下最新（按文件名时间戳）的 PARAMETERS_INFO_*.xml。 */
-function latestParamsInfo(workDir: string): string | null {
+/** 定位工作目录下匹配模块的最新（按文件名时间戳）PARAMETERS_INFO_*.xml。
+ *  @param moduleKey 过滤模块名（含于文件名即可；如 'INTERFEROGRAM_GENERATION'）；可选 */
+function latestParamsInfo(workDir: string, moduleKey?: string): string | null {
   if (!existsSync(workDir)) return null;
-  const files = readdirSync(workDir).filter((f) => /^PARAMETERS_INFO_.*\.xml$/i.test(f));
+  let files = readdirSync(workDir).filter(
+    (f) => f.toUpperCase().startsWith("PARAMETERS_INFO_") && f.toLowerCase().includes(".xml"),
+  );
+  if (moduleKey) {
+    files = files.filter((f) => f.toUpperCase().includes(moduleKey.toUpperCase()));
+  }
   if (files.length === 0) return null;
-  files.sort(); // 文件名含时间戳（如 ..._21Aug2026_205400.xml），升序取最后
+  // 按文件名时间戳（DDMonYYYY_HHMMSS）排序选最新，无法解析退化字典序
+  files.sort((a, b) => {
+    const ts = (s: string) => {
+      const m = /_(\d+[A-Za-z]{3}\d+)_(\d+)/i.exec(s);
+      return m ? Number(m[1].replace(/[^0-9]/g, "") + m[2]) : 0;
+    };
+    const d = ts(a) - ts(b);
+    return d !== 0 ? d : a.localeCompare(b);
+  });
   return join(workDir, files[files.length - 1]);
 }
 

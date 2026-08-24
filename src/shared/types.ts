@@ -71,8 +71,10 @@ export interface ConnectionGraphCheck {
 /** 运行期参数一致性校验结果 */
 export interface ParamsConsistencyCheck {
   mismatches: { key: string; expected: unknown; actual: unknown }[];
-  passed: boolean;                 // 无 mismatch
+  passed: boolean;                 // 无 mismatch 且信息齐全
   message: string;
+  missingInfo: boolean;            // 找不到落盘 XML / 全部 key 无法核实（读不到=需人工核，不静默通过）
+  unverified: string[];            // 快照中但落盘 XML 未包含的 key（供审计）
 }
 
 

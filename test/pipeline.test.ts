@@ -35,22 +35,65 @@ describe("checkConnectionGraph（孤立景数）", () => {
 });
 
 describe("checkParamsConsistency（读 PARAMETERS_INFO）", () => {
-  it("落盘参数与快照一致 → passed", () => {
+  it("落盘参数与快照一致 → passed（missingInfo=false）", () => {
     const dir = mkdtempSync(join(tmpdir(), "pinfo-"));
-    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_CMD.xml"),
+    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_GENERATION_CMD.xml"),
       '<PARAMETERS_INFO_CMD><max_perc_baseline>2</max_perc_baseline><rg_looks_nbr>8</rg_looks_nbr></PARAMETERS_INFO_CMD>');
-    const r = checkParamsConsistency(dir, { max_perc_baseline: 2, rg_looks_nbr: 8 });
+    const r = checkParamsConsistency(dir, { max_perc_baseline: 2, rg_looks_nbr: 8 }, "INTERFEROGRAM_GENERATION");
     expect(r.passed).toBe(true);
     expect(r.mismatches).toEqual([]);
+    expect(r.missingInfo).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
+
   it("落盘参数与快照不一致 → 报 mismatch（如基线 45 vs 2）", () => {
     const dir = mkdtempSync(join(tmpdir(), "pinfo-"));
-    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_CMD.xml"),
+    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_GENERATION_CMD.xml"),
       '<PARAMETERS_INFO_CMD><max_perc_baseline>45</max_perc_baseline></PARAMETERS_INFO_CMD>');
-    const r = checkParamsConsistency(dir, { max_perc_baseline: 2 });
+    const r = checkParamsConsistency(dir, { max_perc_baseline: 2 }, "INTERFEROGRAM_GENERATION");
     expect(r.passed).toBe(false);
     expect(r.mismatches.length).toBeGreaterThan(0);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("找不到 PARAMETERS_INFO_*.xml → passed=false, missingInfo=true（不静默通过）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pinfo-"));
+    const r = checkParamsConsistency(dir, { max_perc_baseline: 2 }, "INTERFEROGRAM_GENERATION");
+    expect(r.passed).toBe(false);
+    expect(r.missingInfo).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("XML 缺 key → 未核实则 missingInfo=true（不静默通过）；部分核实且一致则 passed=true 但 unverified 列出", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pinfo-"));
+    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_GENERATION_CMD.xml"),
+      '<PARAMETERS_INFO_CMD><max_perc_baseline>2</max_perc_baseline></PARAMETERS_INFO_CMD>');
+    // 全部 key 无法核实
+    const rAllMissing = checkParamsConsistency(dir, { rg_looks_nbr: 8 }, "INTERFEROGRAM_GENERATION");
+    expect(rAllMissing.missingInfo).toBe(true);
+    expect(rAllMissing.passed).toBe(false);
+    expect(rAllMissing.unverified).toContain("rg_looks_nbr");
+    // 部分核实且一致
+    const rPartial = checkParamsConsistency(dir, { max_perc_baseline: 2, rg_looks_nbr: 8 }, "INTERFEROGRAM_GENERATION");
+    expect(rPartial.passed).toBe(true);
+    expect(rPartial.missingInfo).toBe(false);
+    expect(rPartial.unverified).toContain("rg_looks_nbr");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("moduleKey 过滤：只选匹配模块的 XML（多个模块文件时按时间戳选最新）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pinfo-"));
+    // 两个模块、不同时间戳，moduleKey 应只匹配 INTERFEROGRAM_GENERATION
+    writeFileSync(join(dir, "PARAMETERS_INFO_IMPORT_SENTINEL1_CMD_13Aug2026_212544.xml"),
+      '<PARAMETERS_INFO_CMD><max_perc_baseline>99</max_perc_baseline></PARAMETERS_INFO_CMD>');
+    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_GENERATION_CMD_20Aug2026_100000.xml"),
+      '<PARAMETERS_INFO_CMD><max_perc_baseline>2</max_perc_baseline></PARAMETERS_INFO_CMD>');
+    // 旧的也混合，验证按时间戳选最新
+    writeFileSync(join(dir, "PARAMETERS_INFO_INTERFEROGRAM_GENERATION_CMD_18Aug2026_220000.xml"),
+      '<PARAMETERS_INFO_CMD><max_perc_baseline>5</max_perc_baseline></PARAMETERS_INFO_CMD>');
+    const r = checkParamsConsistency(dir, { max_perc_baseline: 2 }, "INTERFEROGRAM_GENERATION");
+    expect(r.passed).toBe(true);      // 最新(20Aug)=2 与快照一致
+    expect(r.missingInfo).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
 });
