@@ -52,6 +52,20 @@ interface ProgressSnapshot {
   };
 }
 //#endregion
+//#region src/client/PipelineConfirm.d.ts
+/** 五步确认卡定义（field/GUI 名/默认/推荐/理由），由 host insar_pipeline 生成传入。 */
+interface PipelineCard {
+  title: string;
+  params: {
+    field: string;
+    label: string;
+    defaultValue: string;
+    recommended: string;
+    reason: string;
+    key: string;
+  }[];
+}
+//#endregion
 //#region src/client/conversation.d.ts
 /** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式） */
 declare module "@deepseek-ai/dsh-client-runtime/client" {
@@ -89,6 +103,10 @@ interface InsarTurnData {
   paramConfirm?: {
     terrain: string;
     params: Record<string, unknown>;
+  };
+  /** 最近一次 insar_pipeline 的 5 卡参数确认（manual 模式一次性推送） */
+  pipeline?: {
+    cards: PipelineCard[];
   };
 }
 //#endregion

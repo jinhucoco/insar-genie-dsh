@@ -1,5 +1,6 @@
 import type { ConversationNodeDefinition, TurnLocation } from "@deepseek-ai/dsh-client-runtime/client";
 import type { ProgressSnapshot } from "./shared.js";
+import type { PipelineCard } from "./PipelineConfirm.js";
 /** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式） */
 declare module "@deepseek-ai/dsh-client-runtime/client" {
     interface ConversationTurnDataMap {
@@ -37,6 +38,10 @@ export interface InsarTurnData {
         terrain: string;
         params: Record<string, unknown>;
     };
+    /** 最近一次 insar_pipeline 的 5 卡参数确认（manual 模式一次性推送） */
+    pipeline?: {
+        cards: PipelineCard[];
+    };
 }
 /** 单 turn 累积状态 */
 interface InsarGenieState {
@@ -55,6 +60,9 @@ interface InsarGenieState {
     paramConfirm?: {
         terrain: string;
         params: Record<string, unknown>;
+    };
+    pipeline?: {
+        cards: PipelineCard[];
     };
 }
 /** 单 turn 内累积 insar 工具结果的 Conversation 业务 Definition */

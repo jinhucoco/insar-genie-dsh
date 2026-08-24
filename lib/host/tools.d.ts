@@ -11,6 +11,14 @@ export interface SettingsValue {
     workDir: string;
     poeorbDir: string;
 }
+/** 编排执行单步：runStep(exp, step, overrides)。overrides 可覆盖基线等，便于测试断言分派。 */
+export type RunStep = (exp: Experiment, step: string, overrides?: Record<string, unknown>) => Promise<{
+    ok: boolean;
+    step: string;
+    [k: string]: unknown;
+}>;
+/** 各步 → PARAMETERS_INFO_<MODULE>_CMD_*.xml 的模块匹配段（latestParamsInfo 用 includes(moduleKey)）。 */
+export declare const STEP_MODULE_KEY: Record<string, string>;
 /**
  * 注册三个工具到 host tools 注册表。
  * 依赖：ctx.tools（host 工具运行时）、registry。
@@ -20,6 +28,8 @@ export declare function registerTools(ctx: any, deps: {
     settings?: {
         get(): SettingsValue | undefined;
     };
+    /** 编排运行单步的回调（测试可注入 mock；缺省真实跑 bat）。 */
+    runStep?: RunStep;
 }): void;
 /**
  * 定位 guard 日志（sbas_guard.log）。

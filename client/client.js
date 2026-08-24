@@ -274,6 +274,83 @@ function ParamConfirm(props) {
 }
 
 //#endregion
+//#region src/client/PipelineConfirm.tsx
+/**
+* SBAS 全流程参数确认卡（5 步）：一次性推送每步的 field/GUI 名/默认/推荐/理由。
+* 挂载于 conversation.chat.turnTail；AI 生成卡片后渲染，用户可逐项确认/修改后执行。
+*/
+function PipelineConfirm(props) {
+	const [edits, setEdits] = (0, react.useState)({});
+	return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(PanelCard, {
+		title: "SBAS 全流程参数确认（5 步）",
+		children: [props.cards.map((card) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+			style: {
+				borderTop: "1px solid #ddd",
+				padding: "8px 0"
+			},
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				style: {
+					fontWeight: 600,
+					margin: "6px 0"
+				},
+				children: card.title
+			}), card.params.map((p) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+				style: {
+					display: "block",
+					fontSize: 12,
+					margin: "2px 0"
+				},
+				children: [
+					p.label,
+					":",
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+						type: "text",
+						defaultValue: edits[p.key] ?? p.recommended,
+						onChange: (e) => setEdits((prev) => ({
+							...prev,
+							[p.key]: e.target.value
+						})),
+						style: {
+							marginLeft: 6,
+							width: 90,
+							border: "1px solid #ccc"
+						}
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+						style: {
+							color: "#888",
+							marginLeft: 6
+						},
+						children: [
+							"默认 ",
+							p.defaultValue,
+							" · 推荐 ",
+							p.recommended,
+							" · ",
+							p.reason
+						]
+					})
+				]
+			}, p.field))]
+		}, card.title)), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+			style: { marginTop: 10 },
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+				onClick: props.onConfirmAll,
+				style: {
+					marginRight: 8,
+					padding: "4px 12px"
+				},
+				children: "全部确认"
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+				onClick: props.onCancel,
+				style: { padding: "4px 12px" },
+				children: "取消"
+			})]
+		})]
+	});
+}
+
+//#endregion
 //#region src/client/SettingsCard.tsx
 const DEFAULT_SETTINGS = {
 	earthdataUser: "",
@@ -785,7 +862,8 @@ const INSAR_TOOLS = /* @__PURE__ */ new Set([
 	"insar_status",
 	"insar_list",
 	"insar_register",
-	"insar_templates"
+	"insar_templates",
+	"insar_pipeline"
 ]);
 /**
 * 从 tool/result 事件的 message.content 提取 render 输出的 JSON 文本。
@@ -882,12 +960,16 @@ const insarGenieDefinition = {
 				}
 			};
 		}
+		if (call.name === "insar_pipeline" && isPipelineCards(json)) return {
+			...state,
+			pipeline: { cards: json.pipeline.cards }
+		};
 		return state;
 	},
 	buildLocationData(context, scope) {
 		if (scope !== "turn" || context.state === void 0) return null;
-		const { status, experiments, registered, paramConfirm } = context.state;
-		if (!status && !experiments && !registered && !paramConfirm) return null;
+		const { status, experiments, registered, paramConfirm, pipeline } = context.state;
+		if (!status && !experiments && !registered && !paramConfirm && !pipeline) return null;
 		return {
 			kind: "turn",
 			turn: context.state.turn,
@@ -896,7 +978,8 @@ const insarGenieDefinition = {
 				status,
 				experiments,
 				registered,
-				paramConfirm
+				paramConfirm,
+				pipeline
 			}
 		};
 	}
@@ -905,7 +988,7 @@ const insarGenieDefinition = {
 function selectInsarTurn(owner) {
 	const data = owner.turn.data.get("insar-genie");
 	if (!data) return null;
-	if (!data.status && !data.experiments && !data.registered && !data.paramConfirm) return null;
+	if (!data.status && !data.experiments && !data.registered && !data.paramConfirm && !data.pipeline) return null;
 	return data;
 }
 /**
@@ -949,6 +1032,12 @@ function isRegistered(v) {
 function isParams(v) {
 	return typeof v === "object" && v !== null && typeof v.rgLooks === "number";
 }
+/** insar_pipeline 返回的 5 卡确认（{ pipeline: { cards } } 形状的宽松校验） */
+function isPipelineCards(v) {
+	if (typeof v !== "object" || v === null) return false;
+	const cards = v.pipeline?.cards;
+	return Array.isArray(cards) && cards.every((c) => typeof c === "object" && c !== null && typeof c.title === "string" && Array.isArray(c.params));
+}
 
 //#endregion
 //#region src/client/index.ts
@@ -982,6 +1071,11 @@ const inject = [
 function InsarTurnTail(props) {
 	const snapshot = props.useSession((s) => s);
 	const latest = latestInsarStatus(snapshot?.nodes);
+	if (props.matched?.pipeline) return (0, react.createElement)(PipelineConfirm, {
+		cards: props.matched.pipeline.cards,
+		onConfirmAll: () => {},
+		onCancel: () => {}
+	});
 	if (props.matched?.paramConfirm) return (0, react.createElement)(ParamConfirm, {
 		terrain: props.matched.paramConfirm.terrain,
 		params: props.matched.paramConfirm.params,

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { type SettingsShape } from "./SettingsCard.js";
+import { type SettingsShape, type DirectoryListing } from "./SettingsCard.js";
 import { type InsarTurnData } from "./conversation.js";
 import type { ProgressSnapshot } from "./shared.js";
 /**
@@ -62,5 +62,8 @@ export declare function SettingsCardBound(props: {
         terrain: string;
         status: string;
     }[];
+    /** 应用内目录浏览器原语（browse 后端）；来自 ctx.workspaces.listDirectory / createDirectory。 */
+    listDirectory?: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>;
+    createDirectory?: (path: string, name: string) => Promise<string>;
 }): ReturnType<typeof createElement>;
 export declare function apply(ctx: any): void;

@@ -31,14 +31,42 @@ export type TerrainType = "mining" | "landslide" | "urban" | "desert" | "loess";
 export interface ExperimentParams {
     rgLooks: number;
     azLooks: number;
+    gridSize: number;
     maxTimeBaselineDays: number;
     maxPercBaseline: number;
     filtering: "GOLDSTEIN";
     goldsteinWinSize: number;
-    unwrap: "MCF";
+    unwrappingMethod: "MCF" | "MCF_DELAUNAY";
     unwrapCohThreshold: number;
+    displacementModel: "linear" | "quadratic" | "periodic";
+    coherenceThreshold: number;
+    minValidInterfPercent: number;
+    minValidImagePercent: number;
+    atmosphereLpMeters: number;
+    atmosphereHpDays: number;
+    radius: number;
+    refinePolyDegree: number;
+    geocodeGridSize: number;
     useGacos: boolean;
     demFile: string;
+}
+/** 连接图校验结果 */
+export interface ConnectionGraphCheck {
+    isolatedCount: number;
+    passed: boolean;
+    message: string;
+}
+/** 运行期参数一致性校验结果 */
+export interface ParamsConsistencyCheck {
+    mismatches: {
+        key: string;
+        expected: unknown;
+        actual: unknown;
+    }[];
+    passed: boolean;
+    message: string;
+    missingInfo: boolean;
+    unverified: string[];
 }
 /** insar_status 返回的进度快照 */
 export interface ExperimentStatus {
