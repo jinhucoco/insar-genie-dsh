@@ -189,6 +189,8 @@ export function DirectoryBrowserModal(props: {
   const [error, setError] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  // 路径输入框（Enter 跳到任意盘符/路径，跨 Windows 盘符的关键入口）
+  const [pathInput, setPathInput] = useState("");
 
   // 初始列出（initialPath 若有则从其开始，否则 host home）
   useEffect(() => {
@@ -210,6 +212,7 @@ export function DirectoryBrowserModal(props: {
     const ac = new AbortController();
     setLoading(true);
     setError("");
+    setPathInput(path);
     props
       .listDirectory(path, ac.signal)
       .then((l) => setCurrent(l))
@@ -218,6 +221,16 @@ export function DirectoryBrowserModal(props: {
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
+  };
+
+  /** 路径输入框提交：跳到任意盘符/路径（Windows 跨盘符入口）。 */
+  const submitPath = () => {
+    const p = pathInput.trim();
+    if (!p) return;
+    setPathInput(p);
+    const run = goTo(p);
+    // goTo 内部已处理 loading/error；此处无需额外处理
+    void run;
   };
 
   const createDir = () => {
@@ -278,7 +291,24 @@ export function DirectoryBrowserModal(props: {
               </span>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{current?.path ?? ""}</div>
+          {/* 路径输入框：输入任意盘符/路径回车即跳转（跨 Windows 盘符的关键入口） */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <input
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitPath();
+                }
+              }}
+              placeholder="输入路径（如 D:\work）后回车"
+              style={{ flex: 1, padding: "4px 8px", fontSize: 12, border: "1px solid #ccc", borderRadius: 4, minWidth: 0 }}
+            />
+            <button onClick={submitPath} style={{ padding: "4px 10px", fontSize: 12, cursor: "pointer", border: "1px solid #ccc", borderRadius: 4, background: "#f5f5f5" }}>
+              跳到
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>

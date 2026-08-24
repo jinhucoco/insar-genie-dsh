@@ -456,6 +456,7 @@ function DirectoryBrowserModal(props) {
 	const [error, setError] = (0, react.useState)("");
 	const [creating, setCreating] = (0, react.useState)(false);
 	const [newName, setNewName] = (0, react.useState)("");
+	const [pathInput, setPathInput] = (0, react.useState)("");
 	(0, react.useEffect)(() => {
 		const ac = new AbortController();
 		setLoading(true);
@@ -469,10 +470,18 @@ function DirectoryBrowserModal(props) {
 		const ac = new AbortController();
 		setLoading(true);
 		setError("");
+		setPathInput(path);
 		props.listDirectory(path, ac.signal).then((l) => setCurrent(l)).catch((e) => {
 			if (!ac.signal.aborted) setError(e?.message ?? String(e));
 		}).finally(() => setLoading(false));
 		return () => ac.abort();
+	};
+	/** 路径输入框提交：跳到任意盘符/路径（Windows 跨盘符入口）。 */
+	const submitPath = () => {
+		const p = pathInput.trim();
+		if (!p) return;
+		setPathInput(p);
+		goTo(p);
 	};
 	const createDir = () => {
 		if (!current || !newName.trim() || !props.createDirectory) return;
@@ -554,13 +563,43 @@ function DirectoryBrowserModal(props) {
 								children: c.name
 							})]
 						}, c.path))
-					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						style: {
-							fontSize: 11,
-							color: "#888",
-							marginTop: 2
+							display: "flex",
+							alignItems: "center",
+							gap: 6,
+							marginTop: 4
 						},
-						children: current?.path ?? ""
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+							value: pathInput,
+							onChange: (e) => setPathInput(e.target.value),
+							onKeyDown: (e) => {
+								if (e.key === "Enter") {
+									e.preventDefault();
+									submitPath();
+								}
+							},
+							placeholder: "输入路径（如 D:\\work）后回车",
+							style: {
+								flex: 1,
+								padding: "4px 8px",
+								fontSize: 12,
+								border: "1px solid #ccc",
+								borderRadius: 4,
+								minWidth: 0
+							}
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							onClick: submitPath,
+							style: {
+								padding: "4px 10px",
+								fontSize: 12,
+								cursor: "pointer",
+								border: "1px solid #ccc",
+								borderRadius: 4,
+								background: "#f5f5f5"
+							},
+							children: "跳到"
+						})]
 					})]
 				}),
 				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
