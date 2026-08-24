@@ -15,9 +15,13 @@ export declare function parseGuardLog(log: string): {
     diskGb: number;
     pairsPerMinute: number;
 };
-/** 组合完整状态 */
+/** 组合完整状态。
+ *  @param maxPercBaseline 实验的空间基线（% of critical）。用于无动态速率时的兜底分档：
+ *   短基线(≤2%)→快，长基线(>4%)→慢（长基线对在低相干区会降级为稠密 DEM 配准，慢约 5 倍）。
+ */
 export declare function computeStatus(input: {
     auxXml: string;
     stepPerformedXml: string;
     guardLog: string;
+    maxPercBaseline?: number;
 }): ExperimentStatus;

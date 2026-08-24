@@ -59,4 +59,23 @@ describe("computeStatus", () => {
     expect(status.progressLabel).toBe("无法读取进度文件");
     expect(status.donePairs).toBe(0);
   });
+
+  it("无动态速率时按基线长度分档兑底（短基线快，长基线慢）", () => {
+    // guardLog 为空/无体检记录 → 无动态速率，走基线分档兑底
+    const aux = readFileSync(FIX("auxiliary.sml"), "utf8");
+    const step = readFileSync(FIX("step_performed.sml"), "utf8");
+    // 假设一组有实际对数的数据（用 step 文件里的 total>0）来触发 eta 计算
+    // 关键断言：速率随基线增大而减小
+    const s2 = computeStatus({ auxXml: aux, stepPerformedXml: step, guardLog: "", maxPercBaseline: 2 });
+    const s4 = computeStatus({ auxXml: aux, stepPerformedXml: step, guardLog: "", maxPercBaseline: 4 });
+    const s8 = computeStatus({ auxXml: aux, stepPerformedXml: step, guardLog: "", maxPercBaseline: 8 });
+    // 无基线参数 → 默认为短基线速率 0.22
+    const sDef = computeStatus({ auxXml: aux, stepPerformedXml: step, guardLog: "" });
+    expect(s2.pairsPerMinute).toBeCloseTo(0.22);
+    expect(s4.pairsPerMinute).toBeCloseTo(0.12);
+    expect(s8.pairsPerMinute).toBeCloseTo(0.05);
+    expect(sDef.pairsPerMinute).toBeCloseTo(0.22);
+    // 长基线 ETA 更长（更多剩余时间）
+    expect(s8.etaMinutes).toBeGreaterThan(s2.etaMinutes);
+  });
 });

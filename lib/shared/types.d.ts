@@ -15,6 +15,7 @@ export interface Experiment {
         gacos: string;
         dem: string;
     };
+    guardDir?: string;
     params: ExperimentParams;
     status: ExperimentLifecycle;
     startedAt?: string;

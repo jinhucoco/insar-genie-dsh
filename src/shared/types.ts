@@ -25,6 +25,8 @@ export interface Experiment {
     gacos: string;
     dem: string;
   };
+  guardDir?: string;               // 守护日志所在目录（默认 <实验目录>/asf_experiment；
+                                   // 真实布局可能分离，如日志在 workDir/asf_experiment）
   params: ExperimentParams;        // 参数快照（确认卡确认后的最终值）
   status: ExperimentLifecycle;
   startedAt?: string;              // ISO 时间

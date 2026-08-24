@@ -1,0 +1,32 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (tsc host + tsdown client)
+        run: npm run build
+
+      - name: Run vitest
+        run: npm test
+
+      - name: Clone skill repo (for asset sync check)
+        run: git clone --depth 1 https://github.com/jinhucoco/insar-genie.git ../insar-genie
+
+      - name: Check bundled assets match skill repo (sync check)
+        run: python scripts/sync_assets.py --skill-repo ../insar-genie

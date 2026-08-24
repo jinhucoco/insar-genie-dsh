@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +8,7 @@ const { runPythonMock } = vi.hoisted(() => ({ runPythonMock: vi.fn() }));
 vi.mock("../src/host/runner.js", () => ({ runPython: runPythonMock }));
 
 import { registerTools } from "../src/host/tools.js";
+import { resolveGuardLog } from "../src/host/tools.js";
 import { createRegistry } from "../src/host/registry.js";
 
 interface Tool {
@@ -179,6 +180,31 @@ describe("insar_experiment → step→bat 映射 + 默认 experiment 目录定�
     const t = registered.find((x) => x.name === "insar_experiment")!;
     await expect(t.execute({ experimentId: id, step: "bogus" })).rejects.toThrow(/unknown step/);
     delete process.env.INSAR_GENIE_EXPERIMENT;
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("resolveGuardLog → guardDir 优先定位 guard 日志", () => {
+  it("实验记录的 guardDir 优先命中（不依赖猜测）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "insar-guard-"));
+    const guardDir = join(dir, "asf_experiment");
+    mkdirSync(guardDir, { recursive: true });
+    writeFileSync(join(guardDir, "sbas_guard.log"), "[2026] 1/2");
+    const exp = { id: "x", name: "t", terrain: "desert", dir: join(dir, "exp"), dataDirs: { slc: "", poeorb: "", gacos: "", dem: "" }, guardDir, params: {} as never, status: "draft" };
+    expect(resolveGuardLog(exp as never)).toBe(join(guardDir, "sbas_guard.log"));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("guardDir 指向无日志时回退到实验目录下 asf_experiment 探测", () => {
+    const dir = mkdtempSync(join(tmpdir(), "insar-guard-"));
+    // 在实验目录下放 discover 位置（exp/<dir>/asf_experiment/sbas_guard.log）
+    const expDir = join(dir, "exp");
+    const discoverDir = join(expDir, "asf_experiment");
+    mkdirSync(discoverDir, { recursive: true });
+    writeFileSync(join(discoverDir, "sbas_guard.log"), "[2026] 2/3");
+    const exp = { id: "x", name: "t", terrain: "desert", dir: expDir, dataDirs: { slc: "", poeorb: "", gacos: "", dem: "" }, params: {} as never, status: "draft" };
+    // guardDir 未设置，应回退到 exp/asf_experiment
+    expect(resolveGuardLog(exp as never)).toBe(join(discoverDir, "sbas_guard.log"));
     rmSync(dir, { recursive: true, force: true });
   });
 });

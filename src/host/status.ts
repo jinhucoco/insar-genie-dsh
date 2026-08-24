@@ -60,11 +60,15 @@ export function parseGuardLog(log: string): {
   };
 }
 
-/** 组合完整状态 */
+/** 组合完整状态。
+ *  @param maxPercBaseline 实验的空间基线（% of critical）。用于无动态速率时的兜底分档：
+ *   短基线(≤2%)→快，长基线(>4%)→慢（长基线对在低相干区会降级为稠密 DEM 配准，慢约 5 倍）。
+ */
 export function computeStatus(input: {
   auxXml: string;
   stepPerformedXml: string;
   guardLog: string;
+  maxPercBaseline?: number;
 }): ExperimentStatus {
   // 数据源缺失：返回结构化 error 而非误导的全零状态（AI/面板能区分"未开始"与"读不到文件"）
   if (!input.auxXml.trim()) {
@@ -109,8 +113,14 @@ export function computeStatus(input: {
   const totalPairs = guard.totalPairs > 0 ? guard.totalPairs : total;
   const pct = totalPairs > 0 ? Math.round((donePairs / totalPairs) * 100) : 0;
 
-  // 速率：优先用 guard 动态速率，无则兜底硬编码 0.22（4.5 分/对）
-  const ppm = guard.pairsPerMinute > 0 ? guard.pairsPerMinute : 0.22;
+  // 速率：优先用 guard 动态速率；无则按基线长度分档兜底（短基线快，长基线慢）
+  const fallbackRate =
+    input.maxPercBaseline === undefined || input.maxPercBaseline <= 2
+      ? 0.22
+      : input.maxPercBaseline <= 4
+        ? 0.12
+        : 0.05;
+  const ppm = guard.pairsPerMinute > 0 ? guard.pairsPerMinute : fallbackRate;
 
   return {
     step,

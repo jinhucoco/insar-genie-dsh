@@ -45,14 +45,14 @@ export function registerTools(
     name: "insar_run",
     description: "Run the ASF Sentinel-1 SLC downloader (bundled scripts/multi_download.py) with the given download inputs. Synchronous await: the download runs to completion — hours for large AOIs — so do not expect an immediate return. Provide either a manifest CSV (list) or an AOI + time range (aoi/start/end); pass pol/out to control polarization and destination. scriptDir is optional: defaults to the plugin's bundled scripts directory (auto-installed).",
     parameters: {
-      scriptDir: { type: "string", description: "Optional. Directory containing multi_download.py. Defaults to the plugin's bundled scripts dir (installed with the plugin). Override with INSAR_GENIE_SCRIPTS env or this arg." },
+      scriptDir: { type: "string", description: "Optional. Directory containing multi_download.py. Defaults to the plugin's bundled scripts dir (installed with the plugin). Override with INSAR_GENIE_SCRIPTS env or this arg. Only pass a trusted path." },
       list: { type: "string", description: "Manifest CSV path (columns: date,frame,orbit,satellite,file). List-driven path; takes precedence over aoi/start/end." },
       aoi: { type: "string", description: "AOI shapefile/kml path. Search-driven path; requires start and end." },
       start: { type: "string", description: "Start date YYYYMMDD (search-driven path)." },
       end: { type: "string", description: "End date YYYYMMDD (search-driven path)." },
       pol: { type: "string", description: "Polarization(s), comma-separated, e.g. 'VV+VH,VV'. Defaults to 'VV+VH,VV'." },
       out: { type: "string", description: "Download output directory. Defaults to '<scriptDir>/sentinel1_data'." },
-      pythonBin: { type: "string", description: "Python executable path. Defaults to 'python'." },
+      pythonBin: { type: "string", description: "Python executable path. Defaults to 'python'. Only pass a trusted interpreter path." },
     },
     output: JSON_OUTPUT,
     async execute(input: {
@@ -114,7 +114,7 @@ export function registerTools(
       // guard 日志：探测候选路径（真实布局 guard 日志在 workDir/asf_experiment，不在实验目录附近）
       const guardLog = readFileSafe(resolveGuardLog(exp), "");
       // 注：status.ts 的参数名是 stepPerformedXml（简报原文 stepXml 与现有代码不一致，已适配）
-      return Promise.resolve(computeStatus({ auxXml, stepPerformedXml: stepXml, guardLog }) as never);
+      return Promise.resolve(computeStatus({ auxXml, stepPerformedXml: stepXml, guardLog, maxPercBaseline: exp.params?.maxPercBaseline }) as never);
     },
   }));
 
@@ -147,6 +147,7 @@ export function registerTools(
       poeorbDir: { type: "string", description: "Precise orbit (POEORB) directory." },
       gacosDir: { type: "string", description: "GACOS atmospheric delay directory." },
       demDir: { type: "string", description: "DEM directory." },
+      guardDir: { type: "string", description: "Guard log directory (default <dir>/asf_experiment; set when the log lives elsewhere, e.g. workDir/asf_experiment)." },
       params: { type: "object", additionalProperties: true, description: "Experiment parameter snapshot (ExperimentParams shape)." },
     },
     output: JSON_OUTPUT,
@@ -158,6 +159,7 @@ export function registerTools(
       poeorbDir?: string;
       gacosDir?: string;
       demDir?: string;
+      guardDir?: string;
       params?: Partial<ExperimentParams>;
     }) {
       // 防呆：写入注册表前校验空间基线必须在 2-4%，杜绝 45% 事故
@@ -177,6 +179,7 @@ export function registerTools(
           gacos: input.gacosDir ?? "",
           dem: input.demDir ?? "",
         },
+        guardDir: input.guardDir,
         params: input.params as ExperimentParams,
         status: "draft",
       });
@@ -308,11 +311,19 @@ function readFileSafe(path: string, fallback: string): string {
 }
 
 /**
- * 定位 guard 日志（sbas_guard.log）。真实布局中日志在 workDir/asf_experiment，
- * 实验目录可能与之分离（如实验在 G:\，日志在 D:\work\data\asf_experiment），
- * 故探测多个候选路径，返回第一个存在的；都不存在返回空串（调用方 readFileSafe 兜底）。
+ * 定位 guard 日志（sbas_guard.log）。
+ * 真实布局：日志可能在 workDir/asf_experiment，与实验目录分离（如实验在 G:\，日志在 D:\work\data\asf_experiment）。
+ * 优先级：
+ *  1. 实验记录的 guardDir（注册/设置时显式指定——最可靠）
+ *  2. 探测候选路径（实验目录 / 父级 / DSH_HOME 下的 asf_experiment）
+ * 都不存在返回空串（调用方 readFileSafe 兜底）。
  */
-function resolveGuardLog(exp: Experiment): string {
+export function resolveGuardLog(exp: Experiment): string {
+  // 候选 0：实验记录显式指定的 guardDir（开箱即用的真实布局）
+  if (exp.guardDir) {
+    const explicit = join(exp.guardDir, "sbas_guard.log");
+    if (existsSync(explicit)) return explicit;
+  }
   // 候选 1：实验目录自身下的 asf_experiment
   const self = join(exp.dir, "asf_experiment", "sbas_guard.log");
   if (existsSync(self)) return self;

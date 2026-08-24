@@ -8,7 +8,16 @@ SBAS-InSAR 全链路 DSH 插件：`insar_run` / `insar_status` / `insar_template
 
 插件 `assets/scripts` + `assets/experiment` 里的 Python/bat 脚本**来自技能仓库 `jinhucoco/insar-genie`**（`scripts/` + `experiment/`），是其在插件的**发布副本**。
 
-> 脚本**唯一源**在技能仓库 `jinhucoco/insar-genie`；插件更新 these 副本时，改技能仓库脚本 → 同步复制到 `assets/` → 校验 MD5 一致。改脚本后需同步两仓，否则插件与技能版本漂移。
+> 脚本**唯一源**在技能仓库 `jinhucoco/insar-genie`；插件更新这些副本时，改技能仓库脚本 → 同步复制到 `assets/` → 校验 MD5 一致。改脚本后需同步两仓，否则插件与技能版本漂移。
+
+**同步 / 校验（在插件 repo 根执行）**：
+
+```bash
+python scripts/sync_assets.py --skill-repo <技能仓库路径>    # 校验：报告不一致/缺失，不改动
+python scripts/sync_assets.py --skill-repo <技能仓库路径> --sync   # 同步：从技能仓库复制到 assets
+```
+
+> CI（`.github/workflows/test.yml`）会在 push 到 main 时自动 clone 技能仓库并跑 sync 校验，防止两仓漂移。
 
 ## 安装
 
@@ -69,4 +78,5 @@ dsh plugin --profile web add @dsh-custom/insar-genie-dsh -w
 
 - host 工具：✅ 可用（7 个）
 - client UI：✅ 已有（参数确认卡 / 进度面板 / 设置卡 / 实验列表），走 `conversation.chat.turnTail` + `settings.section` 插槽
-- 构建：`npm run build`（tsc host + tsdown client）；测试 `npm test`（vitest 82 用例）
+- 构建：`npm run build`（tsc host + tsdown client）；测试 `npm test`（vitest 87 用例）
+- CI：`.github/workflows/test.yml`（build + vitest + 两仓脚本同步校验）
