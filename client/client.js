@@ -333,11 +333,18 @@ function SettingsCard(props) {
 	};
 	const [revealed, setRevealed] = (0, react.useState)({});
 	const [pickFor, setPickFor] = (0, react.useState)(null);
+	const [saved, setSaved] = (0, react.useState)(false);
 	const update = (key, value) => {
 		props.onChange?.({
 			...settings,
 			[key]: value
 		});
+	};
+	/** 保存：调用 onSave（同步 scope.set 写回 host），并显示"已保存"提示。 */
+	const save = () => {
+		props.onSave?.(settings);
+		setSaved(true);
+		window.setTimeout(() => setSaved(false), 2500);
 	};
 	/** 敏感字段（存密码/授权码，默认隐藏，可切换显示） */
 	const isSecret = (key) => key === "earthdataPassword" || key === "gacosImapAuthCode";
@@ -419,10 +426,29 @@ function SettingsCard(props) {
 					]
 				}, key))
 			}),
-			/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-				onClick: () => props.onSave?.(settings),
-				style: { padding: "4px 12px" },
-				children: "保存设置"
+			/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				style: {
+					display: "flex",
+					alignItems: "center",
+					gap: 8,
+					marginTop: 4
+				},
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+					onClick: save,
+					style: { padding: "4px 12px" },
+					children: "保存设置"
+				}), saved && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+					role: "status",
+					"aria-live": "polite",
+					style: {
+						fontSize: 12,
+						color: "#2e7d32",
+						display: "inline-flex",
+						alignItems: "center",
+						gap: 4
+					},
+					children: "✓ 已保存"
+				})]
 			}),
 			pickFor && props.listDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DirectoryBrowserModal, {
 				title: FIELD_LABELS[pickFor],

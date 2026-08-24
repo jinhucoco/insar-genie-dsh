@@ -92,9 +92,19 @@ export function SettingsCard(props: {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   // 目录浏览器状态：pickFor 非空时打开对应字段的目录浏览模态框
   const [pickFor, setPickFor] = useState<keyof SettingsShape | null>(null);
+  // "已保存"提示状态：保存成功后显示，自动消失
+  const [saved, setSaved] = useState(false);
 
   const update = (key: keyof SettingsShape, value: string) => {
     props.onChange?.({ ...settings, [key]: value });
+  };
+
+  /** 保存：调用 onSave（同步 scope.set 写回 host），并显示"已保存"提示。 */
+  const save = () => {
+    props.onSave?.(settings);
+    setSaved(true);
+    // 提示自动消失
+    window.setTimeout(() => setSaved(false), 2500);
   };
 
   /** 敏感字段（存密码/授权码，默认隐藏，可切换显示） */
@@ -154,9 +164,20 @@ export function SettingsCard(props: {
           </label>
         ))}
       </div>
-      <button onClick={() => props.onSave?.(settings)} style={{ padding: "4px 12px" }}>
-        保存设置
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+        <button onClick={save} style={{ padding: "4px 12px" }}>
+          保存设置
+        </button>
+        {saved && (
+          <span
+            role="status"
+            aria-live="polite"
+            style={{ fontSize: 12, color: "#2e7d32", display: "inline-flex", alignItems: "center", gap: 4 }}
+          >
+            ✓ 已保存
+          </span>
+        )}
+      </div>
 
       {pickFor && props.listDirectory && (
         <DirectoryBrowserModal

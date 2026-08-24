@@ -268,6 +268,20 @@ describe("SettingsCard（设置表单字段）", () => {
     expect(screen.getAllByText("▲ 启动时自动定位").length).toBe(2);
   });
 
+  it("点击'保存设置'调用 onSave 并显示'已保存'提示（用户获得明确反馈）", () => {
+    let saved: unknown;
+    render(createElement(SettingsCard, {
+      settings: { workDir: "G:\\" },
+      onSave: (s) => { saved = s; },
+    }));
+    // 初始无"已保存"提示
+    expect(screen.queryByText(/已保存/)).toBeNull();
+    fireEvent.click(screen.getByText("保存设置") as HTMLButtonElement);
+    // 提示出现 + onSave 被调用
+    expect(screen.getByText(/已保存/)).toBeTruthy();
+    expect((saved as { workDir?: string } | undefined)?.workDir).toBe("G:\\");
+  });
+
   it("密码/授权码字段默认隐藏（type=password），点眼睛可切换显示", () => {
     render(createElement(SettingsCard, {
       settings: { earthdataPassword: "secret123", gacosImapAuthCode: "auth456" },
