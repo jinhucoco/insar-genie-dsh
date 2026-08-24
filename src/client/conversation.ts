@@ -7,6 +7,7 @@ import type {
 } from "@deepseek-ai/dsh-client-runtime/client";
 import { isAppendSurfaceEvent } from "@deepseek-ai/dsh-client-runtime/client";
 import type { ProgressSnapshot } from "./shared.js";
+import type { PipelineCard } from "./PipelineConfirm.js";
 
 /** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式） */
 declare module "@deepseek-ai/dsh-client-runtime/client" {
@@ -42,10 +43,18 @@ export interface InsarTurnData {
   registered?: { ok: boolean; experimentId: string };
   /** 最近一次 insar_templates 的参数模板（terrain 取工具参数） */
   paramConfirm?: { terrain: string; params: Record<string, unknown> };
+  /** 最近一次 insar_pipeline 的 5 卡参数确认（manual 模式一次性推送） */
+  pipeline?: { cards: PipelineCard[] };
 }
 
 /** 本 Definition 关注的 insar 工具名 */
-const INSAR_TOOLS = new Set(["insar_status", "insar_list", "insar_register", "insar_templates"]);
+const INSAR_TOOLS = new Set([
+  "insar_status",
+  "insar_list",
+  "insar_register",
+  "insar_templates",
+  "insar_pipeline",
+]);
 
 /** 单 turn 累积状态 */
 interface InsarGenieState {
@@ -56,6 +65,7 @@ interface InsarGenieState {
   experiments?: InsarExperimentItem[];
   registered?: { ok: boolean; experimentId: string };
   paramConfirm?: { terrain: string; params: Record<string, unknown> };
+  pipeline?: { cards: PipelineCard[] };
 }
 
 /**
@@ -148,6 +158,9 @@ export const insarGenieDefinition: ConversationNodeDefinition<InsarGenieState> =
       }
       return { ...state, paramConfirm: { terrain, params: json as Record<string, unknown> } };
     }
+    if (call.name === "insar_pipeline" && isPipelineCards(json)) {
+      return { ...state, pipeline: { cards: json.pipeline.cards } };
+    }
     return state;
   },
   buildLocationData(
@@ -155,13 +168,13 @@ export const insarGenieDefinition: ConversationNodeDefinition<InsarGenieState> =
     scope: "step" | "turn",
   ): { kind: "turn"; turn: number; key: "insar-genie"; value: InsarTurnData } | null {
     if (scope !== "turn" || context.state === undefined) return null;
-    const { status, experiments, registered, paramConfirm } = context.state;
-    if (!status && !experiments && !registered && !paramConfirm) return null;
+    const { status, experiments, registered, paramConfirm, pipeline } = context.state;
+    if (!status && !experiments && !registered && !paramConfirm && !pipeline) return null;
     return {
       kind: "turn",
       turn: context.state.turn,
       key: "insar-genie",
-      value: { status, experiments, registered, paramConfirm },
+      value: { status, experiments, registered, paramConfirm, pipeline },
     };
   },
 };
@@ -170,7 +183,7 @@ export const insarGenieDefinition: ConversationNodeDefinition<InsarGenieState> =
 export function selectInsarTurn(owner: { turn: TurnLocation }): InsarTurnData | null {
   const data = owner.turn.data.get("insar-genie");
   if (!data) return null;
-  if (!data.status && !data.experiments && !data.registered && !data.paramConfirm) return null;
+  if (!data.status && !data.experiments && !data.registered && !data.paramConfirm && !data.pipeline) return null;
   return data;
 }
 
@@ -248,5 +261,21 @@ function isParams(v: unknown): v is Record<string, unknown> {
     typeof v === "object" &&
     v !== null &&
     typeof (v as { rgLooks?: unknown }).rgLooks === "number"
+  );
+}
+
+/** insar_pipeline 返回的 5 卡确认（{ pipeline: { cards } } 形状的宽松校验） */
+function isPipelineCards(v: unknown): v is { pipeline: { cards: PipelineCard[] } } {
+  if (typeof v !== "object" || v === null) return false;
+  const cards = (v as { pipeline?: { cards?: unknown } }).pipeline?.cards;
+  return (
+    Array.isArray(cards) &&
+    cards.every(
+      (c: unknown) =>
+        typeof c === "object" &&
+        c !== null &&
+        typeof (c as PipelineCard).title === "string" &&
+        Array.isArray((c as PipelineCard).params),
+    )
   );
 }

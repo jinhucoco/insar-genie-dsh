@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 import { createElement } from "react";
 import { ProgressPanel } from "../src/client/ProgressPanel.js";
 import { ParamConfirm } from "../src/client/ParamConfirm.js";
+import { PipelineConfirm } from "../src/client/PipelineConfirm.js";
 import { InsarTurnTail, SettingsCardBound } from "../src/client/index.js";
 import { SettingsCard, normalizePathInput } from "../src/client/SettingsCard.js";
 import { validateBaseline, type ParamSnapshot, type ProgressSnapshot } from "../src/client/shared.js";
@@ -393,5 +394,68 @@ describe("ParamConfirm", () => {
     fireEvent.change(input, { target: { value: "2" } });
     const btn = screen.getByText("确认执行") as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
+  });
+});
+
+describe("PipelineConfirm（5 卡参数确认）", () => {
+  const cards = [
+    {
+      title: "第 1 步 · 连接图",
+      params: [
+        { field: "maxPercBaseline", label: "空间基线", defaultValue: "2", recommended: "2", reason: "2-4% 铁律，低相干自动扩", key: "maxPercBaseline" },
+        { field: "maxTimeBaseline", label: "时间基线", defaultValue: "180", recommended: "180", reason: "去相关周期", key: "maxTimeBaseline" },
+      ],
+    },
+    {
+      title: "第 2 步 · 干涉+解缠",
+      params: [
+        { field: "rgLooks", label: "距离向多视", defaultValue: "8", recommended: "8", reason: "30m 网格推导 8:2", key: "rgLooks" },
+      ],
+    },
+  ];
+
+  it("渲染 5 步确认卡标题 + 参数列表 + 按钮", () => {
+    render(createElement(PipelineConfirm, {
+      cards,
+      onConfirmAll: () => {},
+      onCancel: () => {},
+    }));
+    expect(screen.getByText("SBAS 全流程参数确认（5 步）")).toBeTruthy();
+    expect(screen.getByText("第 1 步 · 连接图")).toBeTruthy();
+    expect(screen.getByText("第 2 步 · 干涉+解缠")).toBeTruthy();
+    // 参数行含 GUI 名 + 默认/推荐/理由
+    expect(screen.getByText(/空间基线:/)).toBeTruthy();
+    expect(screen.getByText(/默认 2 · 推荐 2 · 2-4% 铁律/)).toBeTruthy();
+    expect(screen.getByText("全部确认")).toBeTruthy();
+    expect(screen.getByText("取消")).toBeTruthy();
+  });
+
+  it("用户可编辑推荐值并保留（输入框 value 更新）", () => {
+    render(createElement(PipelineConfirm, {
+      cards,
+      onConfirmAll: () => {},
+      onCancel: () => {},
+    }));
+    const input = screen.getByLabelText(/空间基线:/) as HTMLInputElement;
+    expect(input.value).toBe("2");
+    fireEvent.change(input, { target: { value: "4" } });
+    expect(input.value).toBe("4");
+  });
+});
+
+describe("InsarTurnTail pipeline 分支", () => {
+  it("matched.pipeline 渲染 5 卡确认（优先于 paramConfirm 分支）", () => {
+    const cards = [
+      {
+        title: "第 1 步 · 连接图",
+        params: [{ field: "maxPercBaseline", label: "空间基线", defaultValue: "2", recommended: "2", reason: "2-4% 铁律", key: "maxPercBaseline" }],
+      },
+    ];
+    render(createElement(InsarTurnTail, {
+      matched: { pipeline: { cards } },
+      useSession: () => undefined,
+    }));
+    expect(screen.getByText("SBAS 全流程参数确认（5 步）")).toBeTruthy();
+    expect(screen.getByText("全部确认")).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 import { createElement, useState, useEffect } from "react";
 import { ProgressPanel } from "./ProgressPanel.js";
 import { ParamConfirm } from "./ParamConfirm.js";
+import { PipelineConfirm } from "./PipelineConfirm.js";
 import { SettingsCard, DEFAULT_SETTINGS, type SettingsShape, type DirectoryListing } from "./SettingsCard.js";
 import {
   insarGenieDefinition,
@@ -53,6 +54,16 @@ export function InsarTurnTail(props: {
     | { nodes?: readonly { kind?: string; seq?: number; call?: { name?: string; argsRaw?: string } | null; content?: readonly unknown[] }[] }
     | undefined;
   const latest = latestInsarStatus(snapshot?.nodes);
+
+  // 0) 全流程参数确认卡：insar_pipeline 的 5 卡结果（manual 模式一次性推送）。
+  //    优先于其他分支：AI 发起全流程编排时先让用户确认 5 步参数再执行。
+  if (props.matched?.pipeline) {
+    return createElement(PipelineConfirm, {
+      cards: props.matched.pipeline.cards,
+      onConfirmAll: () => {},
+      onCancel: () => {},
+    });
+  }
 
   // 1) 参数确认卡：insar_templates 结果（agent 查模板后向用户确认参数）。
   //    优先于进度面板：同一 turn 既查模板又查状态时，先确认参数再展示进度。
