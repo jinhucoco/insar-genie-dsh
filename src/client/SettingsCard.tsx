@@ -40,6 +40,32 @@ const FIELD_LABELS: Record<keyof SettingsShape, string> = {
 const FOLDER_FIELDS: (keyof SettingsShape)[] = ["workDir", "poeorbDir"];
 
 /**
+ * 规范化用户输入的路径，使 browse 后端能接受（它只认"真正限定的绝对路径"）。
+ * Windows 宽松输入归一：
+ * - 空/纯空白 -> 原样
+ * - 裸盘符字母 "D"、"D:" -> "D:\"
+ * - 已含盘符但缺反斜杠 "D:foo" -> "D:\foo"
+ * - UNC 前缀 "\\server" -> "\\server\"（缺共享名时补斜杠，仍可能被后端拒，但已是合法前缀）
+ * - 其它（含反斜杠/正斜杠的路径、UNC 完整路径、相对路径）原样返回，交后端裁决。
+ * 导出以便单测。
+ */
+export function normalizePathInput(raw: string): string {
+  const s = raw.trim();
+  if (!s) return s;
+  // 匹配盘符开头：盘符字母 + 可选冒号 + 余下任意路径。
+  // 之后再补一个反斜杠、剥掉开头多余分隔符，使结果形如 "D:\..."。
+  const drive = /^([A-Za-z]):?(.*)$/.exec(s);
+  if (drive) {
+    const letter = drive[1]!.toUpperCase();
+    const rest = drive[2]!.replace(/^[\\/]+/, "");
+    return `${letter}:\\${rest}`;
+  }
+  // UNC 起始（\\ 或 //）：原样返回（完整前缀由后端裁决）
+  if (/^[\\/]{2}/.test(s)) return s;
+  return s;
+}
+
+/**
  * 设置卡片：凭证/路径/POEORB 表单 + 实验列表。
  * 挂载于 settings.section（设置页插件区）。
  *
@@ -228,7 +254,9 @@ export function DirectoryBrowserModal(props: {
     const p = pathInput.trim();
     if (!p) return;
     setPathInput(p);
-    const run = goTo(p);
+    // host browse 后端只接受"真正限定的绝对路径"（如 D:\foo）；裸盘符/裸路径会被拒。
+    // 这里把用户输入的宽松形式规范化成 host 认可的形式，再交给它。
+    const run = goTo(normalizePathInput(p));
     // goTo 内部已处理 loading/error；此处无需额外处理
     void run;
   };

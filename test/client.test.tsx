@@ -9,7 +9,7 @@ import { createElement } from "react";
 import { ProgressPanel } from "../src/client/ProgressPanel.js";
 import { ParamConfirm } from "../src/client/ParamConfirm.js";
 import { InsarTurnTail, SettingsCardBound } from "../src/client/index.js";
-import { SettingsCard } from "../src/client/SettingsCard.js";
+import { SettingsCard, normalizePathInput } from "../src/client/SettingsCard.js";
 import { validateBaseline, type ParamSnapshot, type ProgressSnapshot } from "../src/client/shared.js";
 
 // vitest 无自动 cleanup，每个测试后卸载 DOM，避免多元素查询歧义
@@ -34,6 +34,29 @@ describe("validateBaseline（防呆铁律）", () => {
     const r = validateBaseline(45);
     expect(r.ok).toBe(false);
     expect(r.message).toContain("2-4");
+  });
+});
+
+describe("normalizePathInput（browse 后端只认完全限定绝对路径）", () => {
+  it("裸盘符 'D' -> 'D:\\'（host browse 会否掉 isAbsolute 为 false 的裸盘符）", () => {
+    expect(normalizePathInput("D")).toBe("D:\\");
+  });
+  it("'D:' -> 'D:\\'", () => {
+    expect(normalizePathInput("D:")).toBe("D:\\");
+  });
+  it("小写盘符 'g' -> 'G:\\'（盘符转大写，host 认可）", () => {
+    expect(normalizePathInput("g")).toBe("G:\\");
+  });
+  it("'D:work' -> 'D:\\work'（盘符后缺反斜杠补上）", () => {
+    expect(normalizePathInput("D:work")).toBe("D:\\work");
+  });
+  it("'D:\\work\\minqin' 原样返回（已是完全限定）", () => {
+    expect(normalizePathInput("D:\\work\\minqin")).toBe("D:\\work\\minqin");
+  });
+  it("空串/纯空白原样返回（不报错，允许 submitPath 自行 bail）", () => {
+    expect(normalizePathInput("")).toBe("");
+    // 纯空白会被 trim 成空串（submitPath 据此直接 return）
+    expect(normalizePathInput("   ")).toBe("");
   });
 });
 

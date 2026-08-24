@@ -299,6 +299,24 @@ const FIELD_LABELS = {
 *  （enviIdl/sarscapeLib 虽也是路径，但指向可执行文件，未纳入文件夹浏览。） */
 const FOLDER_FIELDS = ["workDir", "poeorbDir"];
 /**
+* 规范化用户输入的路径，使 browse 后端能接受（它只认"真正限定的绝对路径"）。
+* Windows 宽松输入归一：
+* - 空/纯空白 -> 原样
+* - 裸盘符字母 "D"、"D:" -> "D:\"
+* - 已含盘符但缺反斜杠 "D:foo" -> "D:\foo"
+* - UNC 前缀 "\\server" -> "\\server\"（缺共享名时补斜杠，仍可能被后端拒，但已是合法前缀）
+* - 其它（含反斜杠/正斜杠的路径、UNC 完整路径、相对路径）原样返回，交后端裁决。
+* 导出以便单测。
+*/
+function normalizePathInput(raw) {
+	const s = raw.trim();
+	if (!s) return s;
+	const drive = /^([A-Za-z]):?(.*)$/.exec(s);
+	if (drive) return `${drive[1].toUpperCase()}:\\${drive[2].replace(/^[\\/]+/, "")}`;
+	if (/^[\\/]{2}/.test(s)) return s;
+	return s;
+}
+/**
 * 设置卡片：凭证/路径/POEORB 表单 + 实验列表。
 * 挂载于 settings.section（设置页插件区）。
 *
@@ -481,7 +499,7 @@ function DirectoryBrowserModal(props) {
 		const p = pathInput.trim();
 		if (!p) return;
 		setPathInput(p);
-		goTo(p);
+		goTo(normalizePathInput(p));
 	};
 	const createDir = () => {
 		if (!current || !newName.trim() || !props.createDirectory) return;
