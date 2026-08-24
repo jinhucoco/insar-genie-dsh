@@ -295,7 +295,7 @@ const FIELD_LABELS = {
 	workDir: "工作目录",
 	poeorbDir: "POEORB 目录"
 };
-/** 通过系统原生目录选择器（宿主 pickDirectory）设置的**文件夹**字段。
+/** 通过"应用内目录浏览器"设置的**文件夹**字段（browse 后端 -> listDirectory）。
 *  （enviIdl/sarscapeLib 虽也是路径，但指向可执行文件，未纳入文件夹浏览。） */
 const FOLDER_FIELDS = ["workDir", "poeorbDir"];
 /**
@@ -314,6 +314,7 @@ function SettingsCard(props) {
 		...props.settings ?? {}
 	};
 	const [revealed, setRevealed] = (0, react.useState)({});
+	const [pickFor, setPickFor] = (0, react.useState)(null);
 	const update = (key, value) => {
 		props.onChange?.({
 			...settings,
@@ -368,15 +369,11 @@ function SettingsCard(props) {
 										flex: 1
 									}
 								}),
-								FOLDER_FIELDS.includes(key) && props.pickDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								FOLDER_FIELDS.includes(key) && props.listDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
 									"aria-label": `浏览选择${FIELD_LABELS[key]}`,
-									title: "系统原生选择文件夹",
-									onClick: () => {
-										props.pickDirectory?.().then((p) => {
-											if (p) update(key, p);
-										});
-									},
+									title: "应用内选择文件夹",
+									onClick: () => setPickFor(key),
 									style: {
 										marginTop: 2,
 										padding: "2px 8px",
@@ -409,6 +406,17 @@ function SettingsCard(props) {
 				style: { padding: "4px 12px" },
 				children: "保存设置"
 			}),
+			pickFor && props.listDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DirectoryBrowserModal, {
+				title: FIELD_LABELS[pickFor],
+				initialPath: settings[pickFor] || void 0,
+				listDirectory: props.listDirectory,
+				createDirectory: props.createDirectory,
+				onPick: (p) => {
+					update(pickFor, p);
+					setPickFor(null);
+				},
+				onClose: () => setPickFor(null)
+			}),
 			props.experiments && props.experiments.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				style: { marginTop: 16 },
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
@@ -435,6 +443,255 @@ function SettingsCard(props) {
 				})]
 			})
 		]
+	});
+}
+/**
+* 应用内目录浏览模态框（browse 后端驱动）：导航面包屑 + 一级目录列表 + 新建文件夹。
+* - 打开时首次列 current；点目录行进入子目录；面包屑/crumb 跳转；"选择此文件夹"回填。
+* - 由宿主 ctx.workspaces.listDirectory / createDirectory 提供；出错显示错误文本。
+*/
+function DirectoryBrowserModal(props) {
+	const [current, setCurrent] = (0, react.useState)(null);
+	const [loading, setLoading] = (0, react.useState)(false);
+	const [error, setError] = (0, react.useState)("");
+	const [creating, setCreating] = (0, react.useState)(false);
+	const [newName, setNewName] = (0, react.useState)("");
+	(0, react.useEffect)(() => {
+		const ac = new AbortController();
+		setLoading(true);
+		setError("");
+		props.listDirectory(props.initialPath || void 0, ac.signal).then((l) => setCurrent(l)).catch((e) => {
+			if (!ac.signal.aborted) setError(e?.message ?? String(e));
+		}).finally(() => setLoading(false));
+		return () => ac.abort();
+	}, []);
+	const goTo = (path) => {
+		const ac = new AbortController();
+		setLoading(true);
+		setError("");
+		props.listDirectory(path, ac.signal).then((l) => setCurrent(l)).catch((e) => {
+			if (!ac.signal.aborted) setError(e?.message ?? String(e));
+		}).finally(() => setLoading(false));
+		return () => ac.abort();
+	};
+	const createDir = () => {
+		if (!current || !newName.trim() || !props.createDirectory) return;
+		setCreating(true);
+		props.createDirectory(current.path, newName.trim()).then((p) => {
+			setNewName("");
+			goTo(p);
+		}).catch((e) => setError(e?.message ?? String(e))).finally(() => setCreating(false));
+	};
+	return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+		style: {
+			position: "fixed",
+			inset: 0,
+			background: "rgba(0,0,0,0.4)",
+			display: "flex",
+			alignItems: "center",
+			justifyContent: "center",
+			zIndex: 1e3
+		},
+		onClick: props.onClose,
+		children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+			style: {
+				background: "#fff",
+				color: "#111",
+				border: "1px solid #ccc",
+				borderRadius: 8,
+				width: "min(680px, 92vw)",
+				maxHeight: "min(500px, 80vh)",
+				display: "flex",
+				flexDirection: "column",
+				overflow: "hidden"
+			},
+			onClick: (e) => e.stopPropagation(),
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					style: {
+						padding: "14px 20px",
+						borderBottom: "1px solid #eee",
+						fontWeight: 600
+					},
+					children: props.title
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					style: {
+						padding: "6px 20px",
+						borderBottom: "1px solid #f0f0f0",
+						fontSize: 13
+					},
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						style: {
+							display: "flex",
+							flexWrap: "wrap",
+							gap: 4,
+							alignItems: "center"
+						},
+						children: (current?.crumbs ?? []).map((c, i) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+							style: {
+								display: "inline-flex",
+								alignItems: "center",
+								gap: 4
+							},
+							children: [i > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								style: { color: "#999" },
+								children: "›"
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								onClick: () => goTo(c.path),
+								style: {
+									border: "none",
+									background: "none",
+									cursor: "pointer",
+									color: c.path === current?.path ? "#111" : "#3b82f6",
+									padding: 0,
+									fontSize: 13,
+									maxWidth: 200,
+									overflow: "hidden",
+									textOverflow: "ellipsis",
+									whiteSpace: "nowrap"
+								},
+								children: c.name
+							})]
+						}, c.path))
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						style: {
+							fontSize: 11,
+							color: "#888",
+							marginTop: 2
+						},
+						children: current?.path ?? ""
+					})]
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					style: {
+						flex: 1,
+						overflowY: "auto",
+						padding: "8px 12px"
+					},
+					children: [
+						loading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							style: {
+								color: "#666",
+								padding: "8px 12px",
+								fontSize: 13
+							},
+							children: "加载中…"
+						}),
+						error && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							style: {
+								color: "#c0392b",
+								padding: "8px 12px",
+								fontSize: 13
+							},
+							children: error
+						}),
+						!loading && !error && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [
+							current && current.path !== current.home && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								onClick: () => goTo(current.crumbs[current.crumbs.length - 2]?.path ?? current.home),
+								style: {
+									display: "block",
+									width: "100%",
+									textAlign: "left",
+									border: "none",
+									background: "none",
+									cursor: "pointer",
+									padding: "6px 8px",
+									fontSize: 13,
+									color: "#555"
+								},
+								children: "↩ 上一级"
+							}),
+							(current?.entries ?? []).map((e) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+								onClick: () => goTo(e.path),
+								style: {
+									display: "block",
+									width: "100%",
+									textAlign: "left",
+									border: "none",
+									background: "none",
+									cursor: "pointer",
+									padding: "6px 8px",
+									fontSize: 13
+								},
+								onMouseEnter: (ev) => ev.currentTarget.style.background = "#f0f0f0",
+								onMouseLeave: (ev) => ev.currentTarget.style.background = "none",
+								children: ["📁 ", e.name]
+							}, e.path)),
+							!loading && !error && (current?.entries ?? []).length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								style: {
+									color: "#888",
+									padding: "12px",
+									fontSize: 13
+								},
+								children: "（空目录）"
+							})
+						] })
+					]
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					style: {
+						padding: "10px 20px",
+						borderTop: "1px solid #eee",
+						display: "flex",
+						alignItems: "center",
+						gap: 8,
+						flexWrap: "wrap"
+					},
+					children: [
+						props.createDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+							value: newName,
+							onChange: (e) => setNewName(e.target.value),
+							placeholder: "新建文件夹名",
+							style: {
+								padding: "4px 8px",
+								fontSize: 13,
+								border: "1px solid #ccc",
+								borderRadius: 4,
+								flex: 1,
+								minWidth: 140
+							},
+							disabled: creating
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							onClick: createDir,
+							style: {
+								padding: "4px 10px",
+								fontSize: 13,
+								cursor: "pointer"
+							},
+							disabled: creating || !newName.trim(),
+							children: "新建文件夹"
+						})] }),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { style: { flex: 1 } }),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							onClick: () => current && props.onPick(current.path),
+							style: {
+								padding: "5px 14px",
+								fontSize: 13,
+								cursor: "pointer",
+								background: "#2e7d32",
+								color: "#fff",
+								border: "none",
+								borderRadius: 4
+							},
+							children: "选择此文件夹"
+						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							onClick: props.onClose,
+							style: {
+								padding: "5px 14px",
+								fontSize: 13,
+								cursor: "pointer",
+								border: "1px solid #ccc",
+								borderRadius: 4,
+								background: "#fff"
+							},
+							children: "取消"
+						})
+					]
+				})
+			]
+		})
 	});
 }
 
@@ -703,7 +960,8 @@ function SettingsCardBound(props) {
 		experiments: props.experiments,
 		settings: draft,
 		autoDetected,
-		pickDirectory: props.pickDirectory,
+		listDirectory: props.listDirectory,
+		createDirectory: props.createDirectory,
 		onChange: (next) => setDraft(next),
 		onSave: (next) => {
 			for (const [k, v] of Object.entries(next)) scope?.set(k, v);
@@ -723,7 +981,8 @@ function apply(ctx) {
 		}, (props) => (0, react.createElement)(SettingsCardBound, {
 			scope,
 			experiments: props?.experiments,
-			pickDirectory: () => ctx.workspaces?.pickDirectory() ?? Promise.resolve(null)
+			listDirectory: (p, s) => ctx.workspaces?.listDirectory(p, s) ?? Promise.reject(/* @__PURE__ */ new Error("workspaces 服务不可用")),
+			createDirectory: (p, n) => ctx.workspaces?.createDirectory(p, n) ?? Promise.reject(/* @__PURE__ */ new Error("workspaces 服务不可用"))
 		}));
 		return () => {
 			if (typeof off === "function") off();

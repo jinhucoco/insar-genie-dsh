@@ -1,7 +1,7 @@
 import { createElement, useState, useEffect } from "react";
 import { ProgressPanel } from "./ProgressPanel.js";
 import { ParamConfirm } from "./ParamConfirm.js";
-import { SettingsCard, DEFAULT_SETTINGS, type SettingsShape } from "./SettingsCard.js";
+import { SettingsCard, DEFAULT_SETTINGS, type SettingsShape, type DirectoryListing } from "./SettingsCard.js";
 import {
   insarGenieDefinition,
   latestInsarStatus,
@@ -119,8 +119,9 @@ export function SettingsCardBound(props: {
     set(field: string, value: unknown): void;
   };
   experiments?: { id: string; name: string; terrain: string; status: string }[];
-  /** 宿主系统原生文件夹选择框；设置页注入于 apply() 中绑定 ctx.workspaces.pickDirectory。 */
-  pickDirectory?: () => Promise<string | null>;
+  /** 应用内目录浏览器原语（browse 后端）；来自 ctx.workspaces.listDirectory / createDirectory。 */
+  listDirectory?: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>;
+  createDirectory?: (path: string, name: string) => Promise<string>;
 }): ReturnType<typeof createElement> {
   const scope = props.scope;
   const [draft, setDraft] = useState<SettingsShape>(() =>
@@ -148,7 +149,8 @@ export function SettingsCardBound(props: {
     experiments: props.experiments,
     settings: draft,
     autoDetected,
-    pickDirectory: props.pickDirectory,
+    listDirectory: props.listDirectory,
+    createDirectory: props.createDirectory,
     onChange: (next: SettingsShape) => setDraft(next),
     onSave: (next: SettingsShape) => {
       // 逐字段写回 host（scope.set 带修订号，序列化保证顺序）
@@ -180,8 +182,12 @@ export function apply(ctx: any): void {
         createElement(SettingsCardBound, {
           scope,
           experiments: props?.experiments,
-          // 宿主系统原生文件夹选择框（取消返回 null）——仅供文件夹字段"浏览…"按钮使用。
-          pickDirectory: () => ctx.workspaces?.pickDirectory() ?? Promise.resolve(null),
+          // 应用内目录浏览器原语（browse 后端 host.listDirectory/createDirectory）——
+          // 仅供文件夹字段"浏览…"按钮自建的应用内模态框使用。
+          listDirectory: (p?: string, s?: AbortSignal) =>
+            ctx.workspaces?.listDirectory(p, s) ?? Promise.reject(new Error("workspaces 服务不可用")),
+          createDirectory: (p: string, n: string) =>
+            ctx.workspaces?.createDirectory(p, n) ?? Promise.reject(new Error("workspaces 服务不可用")),
         }),
     );
     return () => {

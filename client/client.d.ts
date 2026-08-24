@@ -16,6 +16,22 @@ interface SettingsShape {
   workDir: string;
   poeorbDir: string;
 }
+/** 目录列出一级（与 host 返回的 DirectoryListing 对齐；client 独立声明避免 host 依赖）。 */
+interface DirectoryListing {
+  path: string;
+  home: string;
+  crumbs: {
+    name: string;
+    path: string;
+    hidden: boolean;
+  }[];
+  entries: {
+    name: string;
+    path: string;
+    hidden: boolean;
+  }[];
+  truncated: boolean;
+}
 //#endregion
 //#region src/client/shared.d.ts
 /** 进度快照（与 host shared/types.ts 的 ExperimentStatus 对齐；client 独立声明避免 host 依赖） */
@@ -137,8 +153,9 @@ declare function SettingsCardBound(props: {
     terrain: string;
     status: string;
   }[];
-  /** 宿主系统原生文件夹选择框；设置页注入于 apply() 中绑定 ctx.workspaces.pickDirectory。 */
-  pickDirectory?: () => Promise<string | null>;
+  /** 应用内目录浏览器原语（browse 后端）；来自 ctx.workspaces.listDirectory / createDirectory。 */
+  listDirectory?: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>;
+  createDirectory?: (path: string, name: string) => Promise<string>;
 }): ReturnType<typeof createElement>;
 declare function apply(ctx: any): void;
 //#endregion
