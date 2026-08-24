@@ -39,17 +39,42 @@ export type TerrainType =
 
 /** 参数快照（防呆：空间基线必须是 2-4%） */
 export interface ExperimentParams {
-  rgLooks: number;                 // 多视 8
-  azLooks: number;                 // 多视 2
+  rgLooks: number;                 // 多视 RG（由 GridSize 推导）
+  azLooks: number;                 // 多视 AZ
+  gridSize: number;                // 建议网格大小 15/30m（主导参数，多视由此推导）
   maxTimeBaselineDays: number;     // 180
   maxPercBaseline: number;         // 2 或 4 —— 防呆校验区间
   filtering: "GOLDSTEIN";
   goldsteinWinSize: number;        // 64
-  unwrap: "MCF";
+  unwrappingMethod: "MCF" | "MCF_DELAUNAY";
   unwrapCohThreshold: number;      // 0.2
+  displacementModel: "linear" | "quadratic" | "periodic";
+  coherenceThreshold: number;      // 产品相干阈值
+  minValidInterfPercent: number;   // 最小有效干涉 %
+  minValidImagePercent: number;    // 最小有效影像 %（反演2）
+  atmosphereLpMeters: number;      // 去大气低通
+  atmosphereHpDays: number;        // 去大气高通
+  radius: number;                  // 精炼半径
+  refinePolyDegree: number;        // 精炼残差多项式阶
+  geocodeGridSize: number;         // 地理编码网格（与多视匹配）
   useGacos: boolean;
   demFile: string;
 }
+
+/** 连接图校验结果 */
+export interface ConnectionGraphCheck {
+  isolatedCount: number;           // 孤立景数
+  passed: boolean;                 // isolatedCount <= 4
+  message: string;
+}
+
+/** 运行期参数一致性校验结果 */
+export interface ParamsConsistencyCheck {
+  mismatches: { key: string; expected: unknown; actual: unknown }[];
+  passed: boolean;                 // 无 mismatch
+  message: string;
+}
+
 
 /** insar_status 返回的进度快照 */
 export interface ExperimentStatus {
