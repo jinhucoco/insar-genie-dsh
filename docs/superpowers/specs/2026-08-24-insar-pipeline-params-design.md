@@ -169,6 +169,28 @@
 | GENERATE_VERTICAL | Vertical Displacement | NotOK | NotOK | |
 | GENERATE_MAX_SLOPE | Slope Displacement | NotOK | NotOK | |
 
+### ⚠️ 运行阶段参数一致性校验门（防呆铁律落地，强制）
+
+> **参数设置、实验开始运行后，必须校验「实际在跑的参数 == 用户确认的参数快照」**，
+> 确保 SARscape 确实按用户设定执行（防呆：AI 或脚本误传、默认值覆盖、参数丢失导致跑错）。
+> 这是每步运行后、进入下一步前的**强制关卡**，不一致即告警/中断，绝不带错进下一步。
+
+**校验数据源**：SARscape 每步运行后都会落盘 `tmp*/work/PARAMETERS_INFO_<模块>_CMD_<时间戳>.xml`，
+完整记录该步**实际使用的每个参数值**（如 `min_perc_baseline`/`max_perc_baseline`/`max_time_baseline`/
+`rg_looks_nbr`/`up_coh_threshold` 等）。
+
+**校验逻辑**：
+1. 每步运行完成后，定位该步的 `PARAMETERS_INFO_*.xml`（按模块名 + 最新时间戳）。
+2. 解析 XML，提取**用户确认过的关键参数**（至少含：环境基座/多视/解缠/相干阈值/滤波等）。
+3. 与 `insar_pipeline` 存的**参数快照（确认后的最终值）**逐一比对。
+4. 一致 → 通过，进下一步。
+5. 不一致（如 max_perc_baseline 实际是 45 而非用户设的 2）→ **显著告警 + 上报用户，默认中断**，
+   除非用户显式忽略（参数被覆盖是严重问题，需人工判断）。
+6. 校验结果也写入实验记录（registry），供审计。
+
+> 注：参数名 .task/落盘 XML 为小写下划线（如 `max_perc_baseline`），与 .task 的
+> `MAX_PERC_BASELINE` 对应；比对时归一化大小写/下划线。
+
 ## 5. config.env 自动生成（processing 前）
 
 `insar_pipeline` 自动写 config.env（从 settings + 实验目录填路径），关键字段：
