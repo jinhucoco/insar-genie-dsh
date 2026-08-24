@@ -349,7 +349,11 @@ import { join } from "node:path";
 import { deriveLooks, checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot } from "../src/host/pipeline.js";
 
 describe("deriveLooks", () => {
-  it("30m→8:2, 15m→4:1", () => {
+  it("有地形：用该地形模板的多视（urban 15m→5:1，loess 30m→8:2）", () => {
+    expect(deriveLooks(15, "urban")).toEqual({ rgLooks: 5, azLooks: 1 });
+    expect(deriveLooks(30, "loess")).toEqual({ rgLooks: 8, azLooks: 2 });
+  });
+  it("无地形：looksFromGridSize 兑底（30m→8:2，15m→4:1）", () => {
     expect(deriveLooks(30)).toEqual({ rgLooks: 8, azLooks: 2 });
     expect(deriveLooks(15)).toEqual({ rgLooks: 4, azLooks: 1 });
   });
@@ -408,11 +412,15 @@ describe("checkParamsConsistency（读 PARAMETERS_INFO）", () => {
 ```ts
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { looksFromGridSize } from "./templates.js";
+import { looksFromGridSize, getTemplate } from "./templates.js";
 import type { ConnectionGraphCheck, ExperimentParams, ParamsConsistencyCheck } from "../shared/types.js";
 
-/** 由 gridSize 推导多视（30m→8:2 / 15m→4:1）。 */
-export function deriveLooks(gridSize: number): { rgLooks: number; azLooks: number } {
+/** 由 gridSize 推导多视：有地形用模板值（地形优先），否则 looksFromGridSize 兑底（30m→8:2 / 15m→4:1）。 */
+export function deriveLooks(gridSize: number, terrain?: string): { rgLooks: number; azLooks: number } {
+  if (terrain) {
+    const t = getTemplate(terrain as never);
+    return { rgLooks: t.rgLooks, azLooks: t.azLooks };
+  }
   return looksFromGridSize(gridSize);
 }
 
