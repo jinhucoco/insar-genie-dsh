@@ -26,7 +26,7 @@ jobs:
         run: npm test
 
       - name: Clone skill repo (for asset sync check)
-        run: git clone --depth 1 https://github.com/jinhucoco/insar-genie.git ../insar-genie
+        run: git clone --depth 1 --branch dev https://github.com/jinhucoco/insar-genie.git ../insar-genie
 
       - name: Check bundled assets match skill repo (sync check)
         run: python scripts/sync_assets.py --skill-repo ../insar-genie
