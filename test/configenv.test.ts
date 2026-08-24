@@ -16,6 +16,14 @@ describe("buildConfigEnv", () => {
     expect(env).toContain("SARSCAPE_LIB=C:\\SARscape\\auxiliary");
     expect(env).toContain("SLC_POLARIZATION=ONLY_VV_POL");
   });
+
+  it("config.env 行尾必须是 CRLF（cmd for/f 会吞 LF 行，SLC_DATA 值被截断）", () => {
+    const env = buildConfigEnv(F("G:\\exp"));
+    expect((env.match(/\r\n/g) || []).length).toBeGreaterThan(0);
+    // 排除 \r\n 后不应有孤立 \n
+    const stripped = env.replace(/\r\n/g, "");
+    expect(stripped).not.toContain("\n");
+  });
 });
 
 describe("writeConfigEnv", () => {

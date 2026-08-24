@@ -38,7 +38,9 @@ export function buildConfigEnv(input: ConfigEnvInput): string {
     `ENVI_IDL=${input.enviIdl}`,
     `SARSCAPE_LIB=${input.sarscapeLib}`,
   ];
-  return lines.join("\n") + "\n";
+  // 行尾必须 CRLF：cmd 的 for/f 解析 LF(\n) 行尾会吞掉行内容（如 SLC_DATA 值被截断），
+  // 导致 bat 路径错误（assets/SKILL.md:419-421 铁律，2026-08-18 民勤实测）。
+  return lines.join("\r\n") + "\r\n";
 }
 
 /** 写 config.env 到实验目录（resultRoot 根下）。 */
