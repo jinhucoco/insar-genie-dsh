@@ -35,6 +35,10 @@ const FIELD_LABELS: Record<keyof SettingsShape, string> = {
   poeorbDir: "POEORB 目录",
 };
 
+/** 通过系统原生目录选择器（宿主 pickDirectory）设置的**文件夹**字段。
+ *  （enviIdl/sarscapeLib 虽也是路径，但指向可执行文件，未纳入文件夹浏览。） */
+const FOLDER_FIELDS: (keyof SettingsShape)[] = ["workDir", "poeorbDir"];
+
 /**
  * 设置卡片：凭证/路径/POEORB 表单 + 实验列表。
  * 挂载于 settings.section（设置页插件区）。
@@ -51,6 +55,8 @@ export function SettingsCard(props: {
   autoDetected?: { enviIdl?: boolean; sarscapeLib?: boolean };
   onChange?: (next: SettingsShape) => void;
   onSave?: (s: SettingsShape) => void;
+  /** 打开宿主系统原生文件夹选择框，返回所选绝对路径；取消返回 null。 */
+  pickDirectory?: () => Promise<string | null>;
 }): ReactNode {
   const settings: SettingsShape = { ...DEFAULT_SETTINGS, ...(props.settings ?? {}) };
   // 敏感字段"显示/隐藏"状态（仅本地 UI，不影响持久化；key = 敏感字段名）
@@ -83,6 +89,22 @@ export function SettingsCard(props: {
                 onChange={(e) => update(key, e.target.value)}
                 style={{ marginTop: 2, padding: "2px 6px", flex: 1 }}
               />
+              {FOLDER_FIELDS.includes(key) && props.pickDirectory && (
+                <button
+                  type="button"
+                  aria-label={`浏览选择${FIELD_LABELS[key]}`}
+                  title="系统原生选择文件夹"
+                  onClick={() => {
+                    // 用户取消（null）不写回，保持原值
+                    void props.pickDirectory?.().then((p) => {
+                      if (p) update(key, p);
+                    });
+                  }}
+                  style={{ marginTop: 2, padding: "2px 8px", cursor: "pointer" }}
+                >
+                  浏览…
+                </button>
+              )}
               {isSecret(key) && (
                 <button
                   type="button"

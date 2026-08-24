@@ -137,6 +137,8 @@ declare function SettingsCardBound(props: {
     terrain: string;
     status: string;
   }[];
+  /** 宿主系统原生文件夹选择框；设置页注入于 apply() 中绑定 ctx.workspaces.pickDirectory。 */
+  pickDirectory?: () => Promise<string | null>;
 }): ReturnType<typeof createElement>;
 declare function apply(ctx: any): void;
 //#endregion

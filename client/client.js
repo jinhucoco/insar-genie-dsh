@@ -295,6 +295,9 @@ const FIELD_LABELS = {
 	workDir: "工作目录",
 	poeorbDir: "POEORB 目录"
 };
+/** 通过系统原生目录选择器（宿主 pickDirectory）设置的**文件夹**字段。
+*  （enviIdl/sarscapeLib 虽也是路径，但指向可执行文件，未纳入文件夹浏览。） */
+const FOLDER_FIELDS = ["workDir", "poeorbDir"];
 /**
 * 设置卡片：凭证/路径/POEORB 表单 + 实验列表。
 * 挂载于 settings.section（设置页插件区）。
@@ -354,30 +357,49 @@ function SettingsCard(props) {
 								alignItems: "center",
 								gap: 4
 							},
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								type: isSecret(key) && !revealed[key] ? "password" : "text",
-								value: settings[key],
-								onChange: (e) => update(key, e.target.value),
-								style: {
-									marginTop: 2,
-									padding: "2px 6px",
-									flex: 1
-								}
-							}), isSecret(key) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-label": revealed[key] ? `隐藏${FIELD_LABELS[key]}` : `显示${FIELD_LABELS[key]}`,
-								onClick: () => toggleReveal(key),
-								title: revealed[key] ? "隐藏" : "显示",
-								style: {
-									marginTop: 2,
-									border: "none",
-									background: "transparent",
-									cursor: "pointer",
-									fontSize: 14,
-									padding: "2px 4px"
-								},
-								children: revealed[key] ? "🙈" : "👁"
-							})]
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+									type: isSecret(key) && !revealed[key] ? "password" : "text",
+									value: settings[key],
+									onChange: (e) => update(key, e.target.value),
+									style: {
+										marginTop: 2,
+										padding: "2px 6px",
+										flex: 1
+									}
+								}),
+								FOLDER_FIELDS.includes(key) && props.pickDirectory && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									"aria-label": `浏览选择${FIELD_LABELS[key]}`,
+									title: "系统原生选择文件夹",
+									onClick: () => {
+										props.pickDirectory?.().then((p) => {
+											if (p) update(key, p);
+										});
+									},
+									style: {
+										marginTop: 2,
+										padding: "2px 8px",
+										cursor: "pointer"
+									},
+									children: "浏览…"
+								}),
+								isSecret(key) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									"aria-label": revealed[key] ? `隐藏${FIELD_LABELS[key]}` : `显示${FIELD_LABELS[key]}`,
+									onClick: () => toggleReveal(key),
+									title: revealed[key] ? "隐藏" : "显示",
+									style: {
+										marginTop: 2,
+										border: "none",
+										background: "transparent",
+										cursor: "pointer",
+										fontSize: 14,
+										padding: "2px 4px"
+									},
+									children: revealed[key] ? "🙈" : "👁"
+								})
+							]
 						})
 					]
 				}, key))
@@ -608,7 +630,8 @@ const name = "insar-genie-dsh";
 const inject = [
 	"slots",
 	"conversationEvents",
-	"settingsScope"
+	"settingsScope",
+	"workspaces"
 ];
 /** turnTail 组件（chain 注册，session 作用域）：
 * - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据优先**
@@ -680,6 +703,7 @@ function SettingsCardBound(props) {
 		experiments: props.experiments,
 		settings: draft,
 		autoDetected,
+		pickDirectory: props.pickDirectory,
 		onChange: (next) => setDraft(next),
 		onSave: (next) => {
 			for (const [k, v] of Object.entries(next)) scope?.set(k, v);
@@ -698,7 +722,8 @@ function apply(ctx) {
 			inject: () => ({ experiments: window.insarGenieBridge?.experiments })
 		}, (props) => (0, react.createElement)(SettingsCardBound, {
 			scope,
-			experiments: props?.experiments
+			experiments: props?.experiments,
+			pickDirectory: () => ctx.workspaces?.pickDirectory() ?? Promise.resolve(null)
 		}));
 		return () => {
 			if (typeof off === "function") off();
