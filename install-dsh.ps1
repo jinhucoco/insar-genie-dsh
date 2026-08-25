@@ -59,9 +59,10 @@ if (-not (Test-Path $PackageJson)) {
   exit 1
 }
 
-# 用 npm pkg set 写入依赖（file: 绝对路径，同原装插件方式）
-Write-Step "写入依赖 $PluginName → file:$PluginSource"
-npm pkg set "dependencies.$PluginName=file:$($PluginSource -replace '\\','/')" --prefix $ProfileDir 2>&1 | Out-Null
+# 用 npm pkg set 写入依赖。
+# 注意：Windows 下 pnpm 对 `file:D:/...`（盘符冒号）会解析成相对路径报 ENOENT，必须用 `link:D:/...`（软链，正确识别盘符；改源码+构建后重启即生效）。
+Write-Step "写入依赖 $PluginName → link:$PluginSource"
+npm pkg set "dependencies.$PluginName=link:$($PluginSource -replace '\\','/')" --prefix $ProfileDir 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host "[X] 写入依赖失败" -ForegroundColor Red; exit 1 }
 
 # ---------- 安装 ----------
@@ -73,7 +74,8 @@ try {
 } finally {
   Pop-Location
 }
-Write-Ok "DSH 插件已安装 → $ProfileDir"
+Write-Ok "DSH 插件已链接（link: 软链到 $PluginSource）→ $ProfileDir"
+Write-Ok "改源码 + npm run build 后重启 dsh web 即生效，无需重复 install"
 
 # ---------- 完成 ----------
 Write-Host ""
