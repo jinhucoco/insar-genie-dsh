@@ -10,6 +10,8 @@ export interface SettingsValue {
     sarscapeLib: string;
     workDir: string;
     poeorbDir: string;
+    /** B3：从设置页读取的实验目录，非空时 insar_pipeline 用它作为实验根目录（替代 exp.dir） */
+    experimentDir?: string;
 }
 /** 编排执行单步：runStep(exp, step, overrides)。overrides 可覆盖基线等，便于测试断言分派。 */
 export type RunStep = (exp: Experiment, step: string, overrides?: Record<string, unknown>) => Promise<{

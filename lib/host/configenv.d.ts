@@ -8,6 +8,10 @@ export interface ConfigEnvInput {
     sarscapeLib: string;
     gacosList: string;
     sarModules: string;
+    /** 空间基线（% of critical）：连接图 bat 读 %MAX_PERC_BASELINE%（B2 扩基线门生效的关键字段） */
+    maxPercBaseline?: number;
+    /** 时间基线（天）：连接图 bat 读 %MAX_TIME_BASELINE% */
+    maxTimeBaselineDays?: number;
     slcRoi?: string;
     slcPolarization?: string;
     demRaw?: string;

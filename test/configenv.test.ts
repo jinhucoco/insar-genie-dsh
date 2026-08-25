@@ -24,6 +24,16 @@ describe("buildConfigEnv", () => {
     const stripped = env.replace(/\r\n/g, "");
     expect(stripped).not.toContain("\n");
   });
+
+  it("B2：含基线字段 MAX_PERC_BASELINE / MAX_TIME_BASELINE（默认 2 / 180），可被覆盖", () => {
+    const env = buildConfigEnv({ ...F("G:\\exp"), maxPercBaseline: 4, maxTimeBaselineDays: 90 });
+    expect(env).toContain("MAX_PERC_BASELINE=4");
+    expect(env).toContain("MAX_TIME_BASELINE=90");
+    // 缺省时回退 2 / 180（bat 的 if not defined 兜底 + 生成时默认）
+    const env2 = buildConfigEnv(F("G:\\exp"));
+    expect(env2).toContain("MAX_PERC_BASELINE=2");
+    expect(env2).toContain("MAX_TIME_BASELINE=180");
+  });
 });
 
 describe("writeConfigEnv", () => {

@@ -100,6 +100,100 @@ function latestParamsInfo(workDir: string, moduleKey?: string): string | null {
   return join(workDir, files[files.length - 1]);
 }
 
+/** 五步确认卡：每卡 title + params[{field,label,defaultValue,recommended,reason,key}]。
+ *  数据来源：设计文档 §4（字段名/GUI名/软件默认值/推荐值/理由）；推荐值按地形表 getTemplate(terrain)
+ *  + deriveLooks(gridSize, terrain)。
+ *  注意：value 用推荐值（recommended 是确认卡的默认回填值），defaultValue 是 SARscape 软件默认。 */
+export interface PipelineCard {
+  title: string;
+  params: {
+    field: string;
+    label: string;
+    defaultValue: string;
+    recommended: string;
+    reason: string;
+    key: string;
+  }[];
+}
+
+/** 由实验（地形 + 参数快照 + 推导多视）生成 5 张参数确认卡（B1：确认后跑）。 */
+export function buildPipelineCards(exp: {
+  terrain: TerrainType;
+  params: ExperimentParams;
+}): PipelineCard[] {
+  const t = getTemplate(exp.terrain);
+  const looks = deriveLooks(exp.params.gridSize, exp.terrain);
+  const str = (v: string | number | boolean) => String(v);
+  const rec = (v: string | number | boolean) => str(v);
+  const def = (v: string | number | boolean) => str(v);
+
+  // 卡① 连接图
+  const cg = [
+    { field: "MIN_PERC_BASELINE", label: "Min Normal Baseline (%)", defaultValue: def(0), recommended: rec(0), reason: "铁律下限" },
+    { field: "MAX_PERC_BASELINE", label: "Max Normal Baseline (%)", defaultValue: def(2), recommended: rec(exp.params.maxPercBaseline), reason: "铁律；SARscape 对 Sentinel-1 默认 2%，不足自动扩 4%" },
+    { field: "MIN_TIME_BASELINE", label: "Min Temporal Baseline (days)", defaultValue: def(0), recommended: rec(0), reason: "" },
+    { field: "MAX_TIME_BASELINE", label: "Max Temporal Baseline (days)", defaultValue: def(180), recommended: rec(exp.params.maxTimeBaselineDays), reason: "常规 SBAS 时间基线" },
+    { field: "DEGREE_OF_REDUNDANCY", label: "Degree of Redundancy", defaultValue: "low", recommended: "high", reason: "高冗余更稳（可放宽连接率）" },
+    { field: "MAX_LINK_NR_PER_IMAGE", label: "Max Connections per Acquisition", defaultValue: def(8), recommended: "10", reason: "低相干区提高连通" },
+    { field: "ALLOW_DISCONNECTED_BLOCKS", label: "Allow Disconnected Blocks", defaultValue: "NotOK", recommended: "NotOK", reason: "保整体连续" },
+  ];
+
+  // 卡② 干涉+解缠
+  const interf = [
+    { field: "GRID_SIZE_FOR_SUGGESTED_LOOKS", label: "Grid Size for Suggested Looks (m)", defaultValue: def(15), recommended: rec(exp.params.gridSize), reason: "主导参数：多视由此推导（>800km²→30m，<800km²→15m）" },
+    { field: "RG_LOOKS_NBR", label: "Range Looks", defaultValue: def(4), recommended: rec(looks.rgLooks), reason: `由 Grid Size 推导（${exp.params.gridSize}m→${looks.rgLooks}:${looks.azLooks}），展示给用户确认` },
+    { field: "AZ_LOOKS_NBR", label: "Azimuth Looks", defaultValue: def(1), recommended: rec(looks.azLooks), reason: `与 RG 配套（${exp.params.gridSize}m→${looks.rgLooks}:${looks.azLooks}）` },
+    { field: "LAYOVER_SHADOW_MASK", label: "Apply Layover and Shadow Mask", defaultValue: "OK", recommended: "OK", reason: "山地必开" },
+    { field: "FILTERING_METHOD", label: "Filtering Method", defaultValue: "GOLDSTEIN", recommended: rec(exp.params.filtering), reason: "通用；低相干加大 alpha/窗口" },
+    { field: "GOLDSTEIN_WINSIZE", label: "Goldstein Win Size", defaultValue: def(64), recommended: rec(exp.params.goldsteinWinSize), reason: "窗口适中" },
+    { field: "UPHA_METHOD_TYPE", label: "Unwrapping Method Type", defaultValue: "MCF_DELAUNAY", recommended: rec(exp.params.unwrappingMethod), reason: "按地形表：植被/复杂区 Delaunay MCF，城市 MCF" },
+    { field: "UPHA_COH_THRESHOLD", label: "Unwrapping Coherence Threshold", defaultValue: def(0.3), recommended: rec(exp.params.unwrapCohThreshold), reason: "按地形表相干阈值（高相干 0.3，低相干 0.15-0.2）" },
+    { field: "EXTERNAL_SENSOR", label: "Atmosphere External Sensors", defaultValue: "—", recommended: exp.params.useGacos ? "GACOS" : "—", reason: "时相齐必选 GACOS" },
+  ];
+
+  // 卡③ 反演1
+  const inv1 = [
+    { field: "DISPLACEMENT_MODEL_TYPE", label: "Displacement Model Type", defaultValue: "linear", recommended: rec(exp.params.displacementModel), reason: "按地形表：linear 默认；矿区/滑坡 quadratic；冻土 periodic" },
+    { field: "ESTIMATE_RESIDUAL_HEIGHT", label: "Estimate Residual Height", defaultValue: "OK", recommended: "OK", reason: "残余高程估计" },
+    { field: "PRODUCT_COHERENCE_THRESHOLD", label: "Product Coherence Threshold", defaultValue: def(0.3), recommended: rec(exp.params.coherenceThreshold), reason: "按地形表相干阈值" },
+    { field: "MIN_VALID_INTERF_PERC", label: "Min Valid Interferograms %", defaultValue: def(65), recommended: rec(exp.params.minValidInterfPercent), reason: "" },
+    { field: "RADIUS", label: "Refinement Radius (m)", defaultValue: def(22.5), recommended: rec(exp.params.radius), reason: "精炼半径" },
+  ];
+
+  // 卡④ 反演2
+  const inv2 = [
+    { field: "DISPLACEMENT_MODEL_TYPE", label: "Displacement Model Type", defaultValue: "same_as_first", recommended: "same_as_first", reason: "" },
+    { field: "MIN_VALID_INTERF_PERC", label: "Min Valid Interferograms %", defaultValue: def(65), recommended: rec(exp.params.minValidInterfPercent), reason: "" },
+    { field: "MIN_VALID_IMAGE_PERC", label: "Min Valid Acquisitions %", defaultValue: def(90), recommended: rec(exp.params.minValidImagePercent), reason: "" },
+    { field: "PRODUCT_COHERENCE_THRESHOLD", label: "Product Coherence Threshold", defaultValue: def(0.3), recommended: rec(exp.params.coherenceThreshold), reason: "" },
+    { field: "ATMOSPHERE_LP_METERS", label: "Atmosphere Low Pass Size (m)", defaultValue: def(1600), recommended: rec(exp.params.atmosphereLpMeters), reason: "去大气低通" },
+    { field: "ATMOSPHERE_HP_DAYS", label: "Atmosphere High Pass Size (days)", defaultValue: def(365), recommended: rec(exp.params.atmosphereHpDays), reason: "" },
+    { field: "RADIUS", label: "Refinement Radius (m)", defaultValue: def(22.5), recommended: rec(exp.params.radius), reason: "精炼半径" },
+  ];
+
+  // 卡⑤ 地理编码（输出网格与多视匹配）
+  const gridded = looks.rgLooks >= 8 || looks.azLooks >= 2 ? 30 : 15;
+  const geocode = [
+    { field: "GEOCODE_RG_GRID_SIZE", label: "X Dimension (m)", defaultValue: def(15), recommended: rec(exp.params.geocodeGridSize || gridded), reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
+    { field: "GEOCODE_AZ_GRID_SIZE", label: "Y Dimension (m)", defaultValue: def(15), recommended: rec(exp.params.geocodeGridSize || gridded), reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
+    { field: "COHERENCE_THR", label: "Product Temporal Coherence Threshold", defaultValue: def(0.1), recommended: def(0.1), reason: "" },
+    { field: "GENERATE_RASTER", label: "Make Geocoded Raster", defaultValue: "OK", recommended: "OK", reason: "" },
+    { field: "GENERATE_SHAPE", label: "Make Geocoded Shape", defaultValue: "OK", recommended: "OK", reason: "" },
+  ];
+
+  // 每张卡的 params 注入 key（= field，供 client 编辑时定位唯一参数）。
+  const withKey = (arr: { field: string; label: string; defaultValue: string; recommended: string; reason: string }[]) =>
+    arr.map((p) => ({ ...p, key: p.field }));
+
+  return [
+    { title: "① Connection Graph（连接图）", params: withKey(cg) },
+    { title: "② Interferogram & Unwrapping（干涉+解缠）", params: withKey(interf) },
+    { title: "③ Inversion Step 1（反演1）", params: withKey(inv1) },
+    { title: "④ Inversion Step 2（反演2）", params: withKey(inv2) },
+    { title: "⑤ Geocoding（地理编码）", params: withKey(geocode) },
+  ];
+}
+
 /** 生成参数快照（由用户确认的 ExperimentParams → 与落盘 XML key 对齐的映射）。 */
 export function buildParamsSnapshot(p: ExperimentParams): Record<string, unknown> {
   return {

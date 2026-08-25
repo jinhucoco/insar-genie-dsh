@@ -20,6 +20,9 @@ vi.mock("../src/host/pipeline.js", () => ({
   checkParamsConsistency: checkParamsConsistencyMock,
   buildParamsSnapshot: (p: unknown) => ({ snapshot: p }),
   deriveLooks: () => ({ rgLooks: 4, azLooks: 4 }),
+  buildPipelineCards: () => [
+    { title: "① Connection Graph", params: [{ field: "MAX_PERC_BASELINE", label: "Max Baseline", defaultValue: "2", recommended: "2", reason: "铁律", key: "MAX_PERC_BASELINE" }] },
+  ],
 }));
 
 import { registerTools } from "../src/host/tools.js";
@@ -67,7 +70,7 @@ const TEST_SETTINGS = {
   poeorbDir: "D:/work/data/poeorb",
 };
 
-function registerPipelineTool(dir: string, runStep: unknown): Tool {
+function registerPipelineTool(dir: string, runStep: unknown, settingsOverride?: Record<string, unknown>): Tool {
   const registry = createRegistry(join(dir, "registry"));
   const experimentId = registry.create({
     name: "test",
@@ -81,7 +84,7 @@ function registerPipelineTool(dir: string, runStep: unknown): Tool {
   const ctx: any = { tools: { register: (t: Tool) => registered.push(t) } };
   registerTools(ctx, {
     registry,
-    settings: { get: () => TEST_SETTINGS },
+    settings: { get: () => ({ ...TEST_SETTINGS, ...settingsOverride }) },
     runStep: runStep as never,
   });
   const tool = registered.find((t) => t.name === "insar_pipeline");
@@ -106,14 +109,29 @@ describe("insar_pipeline 编排", () => {
 
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  it("B1 默认（确认后跑）：返回 needsConfirm + pipeline.cards，不执行任何步骤", async () => {
+    // 不传 confirmed/confirmMode → 只生成确认卡，不跑步骤
+    const out = await pipeline.execute({ experimentId: pipeline.__experimentId });
+
+    expect(out).toMatchObject({ ok: true, needsConfirm: true });
+    const cards = (out as { pipeline?: { cards?: { title: string; params: { key: string }[] }[] } }).pipeline?.cards;
+    expect(Array.isArray(cards)).toBe(true);
+    expect(cards?.length).toBeGreaterThan(0);
+    expect(cards![0].title).toContain("Connection Graph");
+    expect(cards![0].params[0]).toMatchObject({ key: "MAX_PERC_BASELINE" });
+
+    // 不应执行任何 runStep（不跑 SARscape）
+    expect(runStepMock).not.toHaveBeenCalled();
+  });
+
   it("生成 config.env（写到 resolveExperimentDir 结果）+ 按序跑 5 步 + 每步参数一致性校验", async () => {
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
 
-    const out = await pipeline.execute({ experimentId: pipeline.__experimentId });
+    const out = await pipeline.execute({ experimentId: pipeline.__experimentId, confirmed: true });
 
-    // config.env 写了：writeConfigEnv(resultRoot, envInput)
-    expect(writeConfigEnvMock).toHaveBeenCalledTimes(1);
+    // config.env 写了：初始 writeConfigEnv(resultRoot, baseEnv) + cg 循环里 writeBaselineEnv(2) 各一次
+    expect(writeConfigEnvMock).toHaveBeenCalledTimes(2);
     const [resultRoot, envInput] = writeConfigEnvMock.mock.calls[0];
     expect(resultRoot).toBe(dir); // resolveExperimentDir(dir) === dir
     expect(envInput.resultRoot).toBe(dir);
@@ -151,13 +169,13 @@ describe("insar_pipeline 编排", () => {
       .mockReturnValueOnce({ isolatedCount: 2, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
 
-    await pipeline.execute({ experimentId: pipeline.__experimentId });
+    await pipeline.execute({ experimentId: pipeline.__experimentId, confirmed: true });
 
     // cg 跑 2 次，第二次 overrides.maxPercBaseline=4
     const cgCalls = runStepMock.mock.calls.filter((c) => c[1] === "cg");
     expect(cgCalls).toHaveLength(2);
-    expect(cgCalls[0][2]).toEqual({ maxPercBaseline: 2 });
-    expect(cgCalls[1][2]).toEqual({ maxPercBaseline: 4 });
+    expect(cgCalls[0][2]).toMatchObject({ maxPercBaseline: 2, experimentRoot: dir });
+    expect(cgCalls[1][2]).toMatchObject({ maxPercBaseline: 4, experimentRoot: dir });
     // 后续步仍按序执行
     const steps = runStepMock.mock.calls.filter((c) => c[1] !== "cg").map((c) => c[1]);
     expect(steps).toEqual(["interf", "inv1", "inv2", "geocode"]);
@@ -167,7 +185,7 @@ describe("insar_pipeline 编排", () => {
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 9, passed: false, message: ">4" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
 
-    await expect(pipeline.execute({ experimentId: pipeline.__experimentId })).rejects.toThrow(/连接图校验门未过/);
+    await expect(pipeline.execute({ experimentId: pipeline.__experimentId, confirmed: true })).rejects.toThrow(/连接图校验门未过/);
     // 不应执行后续步骤
     const steps = runStepMock.mock.calls.map((c) => c[1]);
     expect(steps).toEqual(["cg", "cg"]); // 2 次 cg 尝试（2% 与 4%），未进入后续
@@ -179,7 +197,7 @@ describe("insar_pipeline 编排", () => {
       .mockReturnValueOnce({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] })
       .mockReturnValueOnce({ mismatches: [{ key: "max_perc_baseline", expected: 2, actual: 45 }], passed: false, message: "不一致", missingInfo: false, unverified: [] });
 
-    await expect(pipeline.execute({ experimentId: pipeline.__experimentId })).rejects.toThrow(/参数一致性校验失败/);
+    await expect(pipeline.execute({ experimentId: pipeline.__experimentId, confirmed: true })).rejects.toThrow(/参数一致性校验失败/);
     const steps = runStepMock.mock.calls.map((c) => c[1]);
     expect(steps).toEqual(["cg", "interf", "inv1"]); // 在 inv1 处中断
   });
@@ -188,10 +206,28 @@ describe("insar_pipeline 编排", () => {
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [{ key: "x", expected: 1, actual: 2 }], passed: false, message: "不一致", missingInfo: false, unverified: [] });
 
-    const out = await pipeline.execute({ experimentId: pipeline.__experimentId, ignoreInconsistency: true });
+    const out = await pipeline.execute({ experimentId: pipeline.__experimentId, ignoreInconsistency: true, confirmed: true });
 
     const steps = runStepMock.mock.calls.map((c) => c[1]);
     expect(steps).toEqual(["cg", "interf", "inv1", "inv2", "geocode"]);
     expect(out).toMatchObject({ ok: true });
+  });
+
+  it("B3：设置页 experimentDir 非空时作为实验根目录（resultRoot/experimentRoot/config.env 均指向它）", async () => {
+    const expSettingsDir = mkdtempSync(join(tmpdir(), "insar-exp-"));
+    checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
+    checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
+    const p = registerPipelineTool(dir, runStepMock, { experimentDir: expSettingsDir });
+
+    const out = await p.execute({ experimentId: p.__experimentId, confirmed: true });
+
+    // resultRoot 用设置页 experimentDir（非 exp.dir）
+    const [resultRoot] = writeConfigEnvMock.mock.calls[0];
+    expect(resultRoot).toBe(expSettingsDir);
+    // 每步 runStep 的 overrides.experimentRoot 指向设置页目录
+    const expRoots = runStepMock.mock.calls.map((c) => c[2]?.experimentRoot);
+    expect(expRoots.every((r: unknown) => r === expSettingsDir)).toBe(true);
+    expect(out).toMatchObject({ experimentRoot: expSettingsDir });
+    rmSync(expSettingsDir, { recursive: true, force: true });
   });
 });

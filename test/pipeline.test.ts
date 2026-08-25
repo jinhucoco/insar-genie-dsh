@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deriveLooks, checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot } from "../src/host/pipeline.js";
+import { deriveLooks, checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot, buildPipelineCards } from "../src/host/pipeline.js";
 
 describe("deriveLooks", () => {
   it("有地形：用该地形模板的多视（urban 15m→5:1，loess 30m→8:2）", () => {
@@ -13,6 +13,55 @@ describe("deriveLooks", () => {
     expect(deriveLooks(30)).toEqual({ rgLooks: 8, azLooks: 2 });
     expect(deriveLooks(15)).toEqual({ rgLooks: 4, azLooks: 1 });
   });
+
+describe("buildPipelineCards（B1 确认后跑）", () => {
+  const base = {
+    terrain: "urban" as const,
+    params: {
+      rgLooks: 5, azLooks: 1, gridSize: 15, maxTimeBaselineDays: 180, maxPercBaseline: 2,
+      filtering: "GOLDSTEIN" as const, goldsteinWinSize: 64, unwrappingMethod: "MCF" as const,
+      unwrapCohThreshold: 0.3, displacementModel: "linear" as const, coherenceThreshold: 0.3,
+      minValidInterfPercent: 65, minValidImagePercent: 90, atmosphereLpMeters: 1200,
+      atmosphereHpDays: 365, radius: 37.5, refinePolyDegree: 3, geocodeGridSize: 15,
+      useGacos: true, demFile: "",
+    },
+  };
+
+  it("生成 5 张确认卡（每卡 title + params 含 field/label/default/recommended/reason/key）", () => {
+    const cards = buildPipelineCards(base);
+    expect(cards).toHaveLength(5);
+    expect(cards.map((c) => c.title)).toEqual([
+      "① Connection Graph（连接图）",
+      "② Interferogram & Unwrapping（干涉+解缠）",
+      "③ Inversion Step 1（反演1）",
+      "④ Inversion Step 2（反演2）",
+      "⑤ Geocoding（地理编码）",
+    ]);
+    for (const card of cards) {
+      for (const p of card.params) {
+        expect(p.field).toBeTruthy();
+        expect(p.label).toBeTruthy();
+        expect(p.defaultValue).toBeTruthy();
+        expect(p.recommended).toBeTruthy();
+        expect(p.key).toBe(p.field);
+        expect(typeof p.reason).toBe("string");
+      }
+    }
+  });
+
+  it("推荐值按地形表：urban 15m 多视 5:1，baseline 推荐 2（铁律）", () => {
+    const cards = buildPipelineCards(base);
+    const interf = cards[1];
+    const rg = interf.params.find((p) => p.field === "RG_LOOKS_NBR")!;
+    const az = interf.params.find((p) => p.field === "AZ_LOOKS_NBR")!;
+    expect(rg.recommended).toBe("5");
+    expect(az.recommended).toBe("1");
+    const cg = cards[0];
+    const bl = cg.params.find((p) => p.field === "MAX_PERC_BASELINE")!;
+    expect(bl.recommended).toBe("2");
+    expect(bl.defaultValue).toBe("2");
+  });
+});
 });
 
 describe("checkConnectionGraph（孤立景数）", () => {

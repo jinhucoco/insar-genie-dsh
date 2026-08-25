@@ -16,6 +16,8 @@ export declare const SettingsSchema: z<Schemastery.ObjectS<{
     workDir: z<string, string>;
     /** 精密轨道目录：默认 <实验目录>/poeorb，可覆盖为公共轨道库（**不探测**，用户自选存储位置） */
     poeorbDir: z<string, string>;
+    /** 实验目录（B3：从设置页读取，作为 SBAS 实验根目录；非空时 insar_pipeline 用它替代 exp.dir） */
+    experimentDir: z<string, string>;
 }>, Schemastery.ObjectT<{
     earthdataUser: z<string, string>;
     earthdataPassword: z<string, string>;
@@ -28,6 +30,8 @@ export declare const SettingsSchema: z<Schemastery.ObjectS<{
     workDir: z<string, string>;
     /** 精密轨道目录：默认 <实验目录>/poeorb，可覆盖为公共轨道库（**不探测**，用户自选存储位置） */
     poeorbDir: z<string, string>;
+    /** 实验目录（B3：从设置页读取，作为 SBAS 实验根目录；非空时 insar_pipeline 用它替代 exp.dir） */
+    experimentDir: z<string, string>;
 }>>;
 export type Settings = ReturnType<typeof SettingsSchema>;
 /**
