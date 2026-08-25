@@ -576,6 +576,7 @@ config.json 含明文密码，仅本机使用，切勿分享或提交到仓库�
 ### 实验目录（B3）
 
 `insar_pipeline` 的实验目录优先从 **settings 侧边栏的 `experimentDir`** 读取；未配置则回退到实验记录 `exp.dir`。
+> 注意：该实验目录需包含 `bat/` 子目录（内置五步 bat + `config.env`），`insar_pipeline` 用其定位 `bat/<step>/<bat>` 并写 `config.env`（bat 读 `%~dp0..\\..\config.env`）。若用自定义实验目录，需先复制插件的 `assets/experiment` 内容到该目录。
 
 ### 提醒话术模板
 
