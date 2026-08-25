@@ -1,4 +1,4 @@
-# @dsh-custom/insar-genie-dsh
+# @jinhucoco/insar-genie-dsh
 
 SBAS-InSAR 全链路 DSH 插件：`insar_run` / `insar_status` / `insar_templates` / `insar_register` / `insar_list` / `insar_experiment` / `insar_settings` 工具 + 参数防呆校验（2-4% 基线门禁）+ 实验注册表 + client UI（参数确认卡 / 进度面板 / 设置卡）。
 
@@ -22,10 +22,10 @@ python scripts/sync_assets.py --skill-repo <技能仓库路径> --sync   # 同�
 ## 安装
 
 ```powershell
-dsh plugin --profile web add @dsh-custom/insar-genie-dsh -w
+dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w
 ```
 
-> **前提**：本包为源码包（`lib/` 不在仓库内），发布/打包前必须构建。本地开发用 `npm run build` 生成 `lib/` + `client/client.js`；`prepublishOnly`/`prepack` 已钩住 build，`npm publish` 时自动保证产物存在。`assets/` 随包携带（`files` 已含），安装即带脚本。
+> **说明**：本包自包含——`lib/`（host 产物）+ `client/client.js`（client bundle）+ `assets/`（内嵌技能与全套脚本）均已入库，**clone 后开箱即用，无需再 build**。`prepublishOnly`/`prepack` 已钩住 `npm run build`，`npm publish` 时自动保证产物最新。发布/安装命令：`dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w`。
 
 ## 使用
 

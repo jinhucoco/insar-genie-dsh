@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-custom/insar-genie-dsh",
+  "name": "@jinhucoco/insar-genie-dsh",
   "version": "0.1.0",
   "description": "SBAS-InSAR full-chain DSH plugin: insar_run / insar_status / insar_templates host tools + parameter anti-fool validation + experiment registry + client UI (progress panel / param confirm / settings)",
   "type": "module",

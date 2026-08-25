@@ -3,7 +3,7 @@
 # insar-genie-dsh — DSH (DeepSeek Harness) SBAS 插件一键安装脚本 (macOS / Linux)
 #
 # 安装内容：
-#   cordis 插件 @dsh-custom/insar-genie-dsh（SBAS 全链路自包含插件：
+#   cordis 插件 @jinhucoco/insar-genie-dsh（SBAS 全链路自包含插件：
 #   host 工具 + client UI + 内嵌 insar-genie 技能与全套脚本，无需 agent preset）
 #   安装到 DSH web profile（file: 依赖写入 ${DSH_HOME:-$HOME/.dsh}/profiles/web/package.json，
 #   随后 pnpm install 完成真实安装）。
@@ -16,12 +16,12 @@
 #   预览模式：   bash install-dsh.sh --dry-run
 #
 # 卸载：
-#   dsh plugin --profile web remove @dsh-custom/insar-genie-dsh
+#   dsh plugin --profile web remove @jinhucoco/insar-genie-dsh
 # ============================================================================
 set -euo pipefail
 
-REPO="jinhucoco/insar-genie"
-PLUGIN_NAME="@dsh-custom/insar-genie-dsh"
+REPO="jinhucoco/insar-genie-dsh"
+PLUGIN_NAME="@jinhucoco/insar-genie-dsh"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME/profiles/web"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,7 +61,7 @@ fi
 [ -f "$PACKAGE_JSON" ] || die "未找到 web profile package.json: $PACKAGE_JSON（请先 dsh web 初始化 profile）"
 
 info "写入依赖 $PLUGIN_NAME → file:$PLUGIN_SOURCE"
-npm pkg set "dependencies.$PLUGIN_NAME=file:$PLUGIN_SOURCE" --prefix "$PROFILE_DIR" >/dev/null 2>&1 || die "写入依赖失败"
+npm pkg set "dependencies.$PLUGIN_NAME=link:$PLUGIN_SOURCE" --prefix "$PROFILE_DIR" >/dev/null 2>&1 || die "写入依赖失败"
 
 # ---------- 安装 ----------
 info "执行 pnpm install（$PROFILE_DIR）..."

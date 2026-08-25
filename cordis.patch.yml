@@ -5,4 +5,4 @@
 # later manual mount would collide — do NOT also insert the same id by hand.
 - insert:
     - id: insar-genie-dsh
-      name: '@dsh-custom/insar-genie-dsh'
+      name: '@jinhucoco/insar-genie-dsh'

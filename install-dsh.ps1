@@ -2,11 +2,11 @@
 # insar-genie-dsh — DSH (DeepSeek Harness) SBAS 插件一键安装脚本 (Windows)
 #
 # 安装内容：
-#   cordis 插件 @dsh-custom/insar-genie-dsh（SBAS 全链路自包含插件：
+#   cordis 插件 @jinhucoco/insar-genie-dsh（SBAS 全链路自包含插件：
 #   host 工具 + client UI + 内嵌 insar-genie 技能与全套脚本，无需 agent preset）
 #   安装到 DSH web profile（file: 依赖写入 ~/.dsh/profiles/web/package.json，
 #   随后 pnpm install 完成真实安装）。
-#   等效命令：dsh plugin --profile web add @dsh-custom/insar-genie-dsh -w
+#   等效命令：dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w
 #
 # 注意：本插件已自包含（skill + scripts + experiment 打包在 assets），
 #   不需要 agent preset，也不再安装 .agent-presets/insar-genie。
@@ -16,7 +16,7 @@
 #   预览模式：   powershell -ExecutionPolicy Bypass -File install-dsh.ps1 -DryRun
 #
 # 卸载：
-#   dsh plugin --profile web remove @dsh-custom/insar-genie-dsh
+#   dsh plugin --profile web remove @jinhucoco/insar-genie-dsh
 # ============================================================================
 param(
   [switch]$DryRun
@@ -24,8 +24,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'jinhucoco/insar-genie'
-$PluginName = '@dsh-custom/insar-genie-dsh'
+$Repo = 'jinhucoco/insar-genie-dsh'
+$PluginName = '@jinhucoco/insar-genie-dsh'
 $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
 $ProfileDir = Join-Path $DshHome 'profiles\web'
 $PluginSource = $PSScriptRoot
