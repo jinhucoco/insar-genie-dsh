@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // mock 编排外部依赖：绝不真正跑 SARscape / 读真实 PARAMETERS_INFO / 写 config.env。
-const { checkConnectionGraphMock, checkParamsConsistencyMock, writeConfigEnvMock } =
+const { checkConnectionGraphMock, checkParamsConsistencyMock, writeConfigEnvMock, buildParamsSnapshotMock } =
   vi.hoisted(() => ({
     checkConnectionGraphMock: vi.fn(),
     checkParamsConsistencyMock: vi.fn(),
     writeConfigEnvMock: vi.fn(),
+    buildParamsSnapshotMock: vi.fn(),
   }));
 
 vi.mock("../src/host/configenv.js", () => ({
@@ -18,7 +19,7 @@ vi.mock("../src/host/configenv.js", () => ({
 vi.mock("../src/host/pipeline.js", () => ({
   checkConnectionGraph: checkConnectionGraphMock,
   checkParamsConsistency: checkParamsConsistencyMock,
-  buildParamsSnapshot: (p: unknown) => ({ snapshot: p }),
+  buildParamsSnapshot: buildParamsSnapshotMock,
   deriveLooks: () => ({ rgLooks: 4, azLooks: 4 }),
   buildPipelineCards: () => [
     { title: "① Connection Graph", params: [{ field: "MAX_PERC_BASELINE", label: "Max Baseline", defaultValue: "2", recommended: "2", reason: "铁律", key: "MAX_PERC_BASELINE" }] },
@@ -102,6 +103,8 @@ describe("insar_pipeline 编排", () => {
     checkConnectionGraphMock.mockReset();
     checkParamsConsistencyMock.mockReset();
     writeConfigEnvMock.mockReset();
+    buildParamsSnapshotMock.mockReset();
+    buildParamsSnapshotMock.mockImplementation((p: unknown) => ({ snapshot: p }));
     runStepMock = vi.fn();
     runStepMock.mockResolvedValue({ ok: true, step: "cg" });
     pipeline = registerPipelineTool(dir, runStepMock);
@@ -179,6 +182,9 @@ describe("insar_pipeline 编排", () => {
     // 后续步仍按序执行
     const steps = runStepMock.mock.calls.filter((c) => c[1] !== "cg").map((c) => c[1]);
     expect(steps).toEqual(["interf", "inv1", "inv2", "geocode"]);
+    // B2 重要发现：参数快照必须在扩基线后构建（snapshot.max_perc_baseline 应为扩后的 4）
+    expect(buildParamsSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(buildParamsSnapshotMock.mock.calls[0][0]).toMatchObject({ maxPercBaseline: 4 });
   });
 
   it("连接图门：扩到 4% 仍不合格 → 抛错中断", async () => {

@@ -338,7 +338,6 @@ export function registerTools(
         } as never);
       }
 
-      const snapshot = buildParamsSnapshot(exp.params);
       const runStep = deps.runStep ?? defaultRunStep;
       const writeBaselineEnv = (baseline: number) => {
         writeConfigEnv(experimentRoot, {
@@ -368,6 +367,10 @@ export function registerTools(
       }
       // 最终基线回写注册表
       deps.registry.update(exp.id, { params: { ...exp.params, maxPercBaseline } });
+
+      // 参数快照必须在扩基线之后构建：snapshot 需反映实际运行的基线（maxPercBaseline，可能是 2 或 4），
+      // 否则扩基线后 PARAMETERS_INFO 记录的实际基线(4) vs 快照(2) 会误报不一致（B2 重要发现修复）。
+      const snapshot = buildParamsSnapshot({ ...exp.params, maxPercBaseline });
 
       // ③ 依次跑 interf/inv1/inv2/geocode，每步后参数一致性校验门。
       const steps: { step: string; moduleKey: string }[] = [
