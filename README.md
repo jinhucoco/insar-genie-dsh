@@ -89,6 +89,45 @@ dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w
 | `insar_list` | 列出已注册实验（id/name/terrain/status）|
 | `insar_settings` | 读取解析后的设置值（含启动探测的 ENVI/SARscape 路径）|
 
+## 版本维护
+
+### 如何让用户升级到新版本
+
+用户安装时 `dsh plugin add` 会写入 **`^` 范围**（如 `^0.1.0`）。你发布新版本后，用户用：
+
+```bash
+# 升级到当前范围（如 ^0.1.0）内最新
+cd ~/.dsh/profiles/web && pnpm update @jinhucoco/insar-genie-dsh
+# 或（更简洁）
+dsh plugin --profile web update @jinhucoco/insar-genie-dsh
+# 重启 dsh web 生效
+```
+
+### 你发布新版本（一键脚本）
+
+```bash
+bash .release.sh patch      # bug 修复/文档 (0.1.0 → 0.1.1) — 用户 pnpm update 能自动拿到
+bash .release.sh minor      # 新功能/非 breaking (0.1.0 → 0.2.0)
+bash .release.sh major      # breaking (→ 1.0.0)
+bash .release.sh --dry-run  # 预览流程, 不实际发布
+```
+
+`.release.sh` 自动：校验两仓资产一致 → bump 版本 → `npm run build` → `npm publish --access public` → push git tag（触发 CI）。
+
+### ⚠️ 版本范围陷阱（0.x 敏感）
+
+npm 的 `^0.1.0` **只匹配 `0.1.x`**（0.x 的 minor 视为 breaking）。所以：
+
+| 你发 | 用户 `pnpm update` 能否拿到 |
+|---|---|
+| `0.1.1`（patch）| ✅ 能 |
+| `0.2.0`（minor，含新功能）| ❌ 不能 |
+| `1.0.0`（major）| ❌ 不能 |
+
+> 想让用户自动升级新功能（minor），需用户在 `^0.1.0` 范围内等 patch，或手动升级。**建议**：插件稳定后再升 `1.0.0`，此后 `^1.0.0` 能自动升级所有 `1.x`。
+
+> **发布前必须**：改插件 `assets/`（脚本/SKILL.md）时，先改**技能仓库 `jinhucoco/insar-genie` dev**，再 `scripts/sync_assets.py --sync`，最后发布——否则 CI 的 sync 校验失败。
+
 ## 设置（settings → insar-genie）
 
 - earthdataUser / earthdataPassword：ASF 凭证
