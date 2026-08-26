@@ -136,6 +136,7 @@ export function buildPipelineCards(exp: {
     { field: "DEGREE_OF_REDUNDANCY", label: "Degree of Redundancy", defaultValue: "low", recommended: "high", reason: "高冗余更稳（可放宽连接率）" },
     { field: "MAX_LINK_NR_PER_IMAGE", label: "Max Connections per Acquisition", defaultValue: def(8), recommended: "10", reason: "低相干区提高连通" },
     { field: "ALLOW_DISCONNECTED_BLOCKS", label: "Allow Disconnected Blocks", defaultValue: "NotOK", recommended: "NotOK", reason: "保整体连续" },
+    { field: "SUPER_REFERENCE", label: "Input Super Reference（中央超参考）", defaultValue: "auto", recommended: rec(exp.params.superReference || "(未设：用内置民勤超参考兑底)"), reason: "换新研究区必改；写完整 msc_slc_list 路径" },
   ];
 
   // 卡② 干涉+解缠

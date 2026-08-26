@@ -28,6 +28,7 @@ vi.mock("../src/host/pipeline.js", () => ({
 
 import { registerTools } from "../src/host/tools.js";
 import { createRegistry } from "../src/host/registry.js";
+import { resolveExperimentDir } from "../src/host/paths.js";
 
 interface Tool {
   name: string;
@@ -127,17 +128,19 @@ describe("insar_pipeline 编排", () => {
     expect(runStepMock).not.toHaveBeenCalled();
   });
 
-  it("生成 config.env（写到 resolveExperimentDir 结果）+ 按序跑 5 步 + 每步参数一致性校验", async () => {
+  it("生成 config.env（写到脚本根=插件内置）+ 按序跑 5 步 + 每步参数一致性校验", async () => {
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
 
     const out = await pipeline.execute({ experimentId: pipeline.__experimentId, confirmed: true });
 
-    // config.env 写了：初始 writeConfigEnv(resultRoot, baseEnv) + cg 循环里 writeBaselineEnv(2) 各一次
+    // config.env 写了：初始 writeConfigEnv(scriptRoot, baseEnv) + cg 循环里 writeBaselineEnv(2) 各一次
+    // scriptsDir 未设 → 脚本根 = 插件内置 assets/experiment（resolveExperimentDir() 默认链）
     expect(writeConfigEnvMock).toHaveBeenCalledTimes(2);
-    const [resultRoot, envInput] = writeConfigEnvMock.mock.calls[0];
-    expect(resultRoot).toBe(dir); // resolveExperimentDir(dir) === dir
-    expect(envInput.resultRoot).toBe(dir);
+    const [scriptRoot, envInput] = writeConfigEnvMock.mock.calls[0];
+    expect(scriptRoot).toBe(resolveExperimentDir());
+    expect(envInput.resultRoot).toBe(dir); // 数据根回退 exp.dir
+    expect(envInput.superReference).toBe(""); // SUPER_REFERENCE 默认空（走 bat 兑底）
     expect(envInput.slcData).toBe("E:/slc");
     expect(envInput.workDir).toBe("D:/work/data");
 
@@ -177,8 +180,8 @@ describe("insar_pipeline 编排", () => {
     // cg 跑 2 次，第二次 overrides.maxPercBaseline=4
     const cgCalls = runStepMock.mock.calls.filter((c) => c[1] === "cg");
     expect(cgCalls).toHaveLength(2);
-    expect(cgCalls[0][2]).toMatchObject({ maxPercBaseline: 2, experimentRoot: dir });
-    expect(cgCalls[1][2]).toMatchObject({ maxPercBaseline: 4, experimentRoot: dir });
+    expect(cgCalls[0][2]).toMatchObject({ maxPercBaseline: 2, scriptRoot: resolveExperimentDir() });
+    expect(cgCalls[1][2]).toMatchObject({ maxPercBaseline: 4, scriptRoot: resolveExperimentDir() });
     // 后续步仍按序执行
     const steps = runStepMock.mock.calls.filter((c) => c[1] !== "cg").map((c) => c[1]);
     expect(steps).toEqual(["interf", "inv1", "inv2", "geocode"]);
@@ -219,21 +222,49 @@ describe("insar_pipeline 编排", () => {
     expect(out).toMatchObject({ ok: true });
   });
 
-  it("B3：设置页 experimentDir 非空时作为实验根目录（resultRoot/experimentRoot/config.env 均指向它）", async () => {
+  it("B3 解耦：scriptsDir 定脚本根（config.env 目标+runStep），experimentDir 定数据根（resultRoot）", async () => {
     const expSettingsDir = mkdtempSync(join(tmpdir(), "insar-exp-"));
+    const scriptSettingsDir = mkdtempSync(join(tmpdir(), "insar-scripts-"));
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
-    const p = registerPipelineTool(dir, runStepMock, { experimentDir: expSettingsDir });
+    const p = registerPipelineTool(dir, runStepMock, { experimentDir: expSettingsDir, scriptsDir: scriptSettingsDir });
 
     const out = await p.execute({ experimentId: p.__experimentId, confirmed: true });
 
-    // resultRoot 用设置页 experimentDir（非 exp.dir）
-    const [resultRoot] = writeConfigEnvMock.mock.calls[0];
-    expect(resultRoot).toBe(expSettingsDir);
-    // 每步 runStep 的 overrides.experimentRoot 指向设置页目录
-    const expRoots = runStepMock.mock.calls.map((c) => c[2]?.experimentRoot);
-    expect(expRoots.every((r: unknown) => r === expSettingsDir)).toBe(true);
-    expect(out).toMatchObject({ experimentRoot: expSettingsDir });
+    // config.env 写到脚本根（scriptsDir），而非实验目录/插件内置
+    const [cfgTarget, envInput] = writeConfigEnvMock.mock.calls[0];
+    expect(cfgTarget).toBe(scriptSettingsDir);
+    expect(envInput.resultRoot).toBe(expSettingsDir); // 数据根用设置页 experimentDir（非 exp.dir）
+    // 每步 runStep 的 overrides.scriptRoot 指向脚本根
+    const roots = runStepMock.mock.calls.map((c) => c[2]?.scriptRoot);
+    expect(roots.every((r: unknown) => r === scriptSettingsDir)).toBe(true);
+    // 返回值同时暴露两个根
+    expect(out).toMatchObject({ scriptRoot: scriptSettingsDir, experimentDir: expSettingsDir });
     rmSync(expSettingsDir, { recursive: true, force: true });
+    rmSync(scriptSettingsDir, { recursive: true, force: true });
+  });
+
+  it("SUPER_REFERENCE：注册参数 params.superReference 非空时写入 config.env", async () => {
+    const registry = createRegistry(join(dir, "registry-sr"));
+    const id = registry.create({
+      name: "sr-test", terrain: "desert", dir,
+      dataDirs: { slc: "E:/slc", poeorb: "", gacos: "", dem: "" },
+      params: { ...TEST_PARAMS, superReference: "E:/slc_out/sentinel1_999_20250101_010101_IW_D_VV_msc_slc_list" } as never,
+      status: "draft",
+    });
+    checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
+    checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
+    const registered: Tool[] = [];
+    registerTools({ tools: { register: (t: Tool) => registered.push(t) } } as never, {
+      registry,
+      settings: { get: () => ({ ...TEST_SETTINGS, scriptsDir: join(dir, "scripts") }) } as never,
+      runStep: runStepMock as never,
+    });
+    const tool = registered.find((t) => t.name === "insar_pipeline")!;
+
+    await tool.execute({ experimentId: id, confirmed: true });
+
+    const [, envInput] = writeConfigEnvMock.mock.calls[0];
+    expect(envInput.superReference).toBe("E:/slc_out/sentinel1_999_20250101_010101_IW_D_VV_msc_slc_list");
   });
 });

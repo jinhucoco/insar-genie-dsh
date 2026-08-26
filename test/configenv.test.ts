@@ -34,6 +34,13 @@ describe("buildConfigEnv", () => {
     expect(env2).toContain("MAX_PERC_BASELINE=2");
     expect(env2).toContain("MAX_TIME_BASELINE=180");
   });
+
+  it("SUPER_REFERENCE：写入 config.env（空 = bat 内置兑底；非空 = 自定义超参考）", () => {
+    const env2 = buildConfigEnv(F("G:\\exp"));
+    expect(env2).toContain("SUPER_REFERENCE="); // 空 → cmd 视为未定义，bat 走 if not defined 兑底
+    const env3 = buildConfigEnv({ ...F("G:\\exp"), superReference: "E:/slc/sentinel1_999_msc_slc_list" });
+    expect(env3).toContain("SUPER_REFERENCE=E:/slc/sentinel1_999_msc_slc_list");
+  });
 });
 
 describe("writeConfigEnv", () => {

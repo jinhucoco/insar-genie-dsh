@@ -21,8 +21,10 @@ export interface SettingsValue {
   sarscapeLib: string;
   workDir: string;
   poeorbDir: string;
-  /** B3：从设置页读取的实验目录，非空时 insar_pipeline 用它作为实验根目录（替代 exp.dir） */
+  /** B3：实验数据根（非空时替代注册的 exp.dir 作为 RESULT_ROOT/TMP_DIR 家） */
   experimentDir?: string;
+  /** 脚本根（解耦）：五步 bat 树 + config.env 的家；空 = 插件内置 assets/experiment */
+  scriptsDir?: string;
 }
 
 /** 编排执行单步：runStep(exp, step, overrides)。overrides 可覆盖基线等，便于测试断言分派。 */
@@ -299,27 +301,30 @@ export function registerTools(
       const s = deps.settings?.get();
       if (!s) throw new Error("insar_pipeline: settings not configured (ASF/ENVI/SARscape paths)");
 
-      // B3: 实验目录优先用设置页的 experimentDir（非空），否则 fallback 到 exp.dir。
-      // config.env 位置：写到 bat 读取的 experimentRoot（bat 用 %~dp0..\..\config.env，上两级 = experimentRoot）。
-      const expDir = s.experimentDir && s.experimentDir.trim() ? s.experimentDir : exp.dir;
-      const experimentRoot = resolveExperimentDir(expDir);
-      const tmpDir = join(expDir, "tmp");
+      // B3 扩展（解耦）：脚本根(scriptsDir，空=插件内置 assets/experiment) 与 实验数据根(experimentDir，空=exp.dir) 分离。
+      // config.env 写到脚本根（bat 用 %~dp0..\..\config.env 在脚本根找它）；数据全靠 config.env 里的绝对路径。
+      const expDataDir = s.experimentDir && s.experimentDir.trim() ? s.experimentDir : exp.dir;
+      const scriptRoot = resolveExperimentDir(
+        s.scriptsDir && s.scriptsDir.trim() ? s.scriptsDir : undefined,
+      );
+      const tmpDir = join(expDataDir, "tmp");
       const baseEnv: ConfigEnvInput = {
         workDir: s.workDir,
-        resultRoot: expDir,
+        resultRoot: expDataDir,
         tmpDir,
         slcData: exp.dataDirs.slc || join(s.workDir, "slc"),
         demFinal: exp.dataDirs.dem || "",
         enviIdl: s.enviIdl,
         sarscapeLib: s.sarscapeLib,
-        gacosList: join(expDir, "gacos_list.txt"),
-        sarModules: join(expDir, "sar_modules.txt"),
+        gacosList: join(expDataDir, "gacos_list.txt"),
+        sarModules: join(expDataDir, "sar_modules.txt"),
         maxPercBaseline: exp.params?.maxPercBaseline ?? 2,
         maxTimeBaselineDays: exp.params?.maxTimeBaselineDays ?? 180,
+        superReference: exp.params?.superReference ?? "",
       };
 
-      // 先写一次 config.env（无论确认与否都生成）。
-      writeConfigEnv(experimentRoot, baseEnv);
+      // 先写一次 config.env 到脚本根（无论确认与否都生成）。
+      writeConfigEnv(scriptRoot, baseEnv);
 
       const confirmMode = input.confirmMode ?? "manual";
       const confirmed = input.confirmed === true || confirmMode === "auto";
@@ -331,7 +336,8 @@ export function registerTools(
           ok: true,
           needsConfirm: true,
           experimentId: exp.id,
-          experimentRoot,
+          scriptRoot,
+          experimentDir: expDataDir,
           configEnv: baseEnv,
           pipeline: { cards },
           note: "Phase 1: cards generated for user confirmation (B1). Re-call with confirmed=true (or confirmMode='auto') to run.",
@@ -340,7 +346,7 @@ export function registerTools(
 
       const runStep = deps.runStep ?? defaultRunStep;
       const writeBaselineEnv = (baseline: number) => {
-        writeConfigEnv(experimentRoot, {
+        writeConfigEnv(scriptRoot, {
           ...baseEnv,
           maxPercBaseline: baseline,
         });
@@ -356,8 +362,8 @@ export function registerTools(
       for (let attempt = 0; attempt < 3; attempt++) {
         // B2: 先把当前基线写进 config.env（bat 读 %MAX_PERC_BASELINE%），确保扩基线真正生效。
         writeBaselineEnv(maxPercBaseline);
-        await runStep(exp, "cg", { maxPercBaseline, experimentRoot });
-        cgCheck = checkConnectionGraph(expDir);
+        await runStep(exp, "cg", { maxPercBaseline, scriptRoot });
+        cgCheck = checkConnectionGraph(expDataDir);
         if (cgCheck.passed) break;
         if (maxPercBaseline >= 4) break; // 铁律 2-4%，已到上限仍不合格
         maxPercBaseline = 4;
@@ -384,7 +390,7 @@ export function registerTools(
         { step: "cg", ok: cgCheck.passed },
       ];
       for (const { step, moduleKey } of steps) {
-        await runStep(exp, step, { experimentRoot });
+        await runStep(exp, step, { scriptRoot });
         const check = checkParamsConsistency(paramsInfoDir, snapshot, moduleKey);
         if (!check.passed && !input.ignoreInconsistency) {
           throw new Error(`insar_pipeline: 步骤 ${step} 参数一致性校验失败（${check.message}）；传 ignoreInconsistency=true 可跳过`);
@@ -397,7 +403,8 @@ export function registerTools(
         experimentId: exp.id,
         // B2 一致：configEnv 反映扩基线后的实际基线（非初始 baseEnv 的 2）
         configEnv: { ...baseEnv, maxPercBaseline },
-        experimentRoot,
+        scriptRoot,
+        experimentDir: expDataDir,
         baseline: { maxPercBaseline },
         steps: stepResults,
         note: "pipeline orchestration driver; step execution via runStep (default runs the SARscape bat)",
@@ -425,7 +432,7 @@ function stepToBat(step: string): string {
 }
 
 /** 缺省 runStep：真实调用 SARscape 批处理（step 键 → bat 文件）。
- *  @param overrides.experimentRoot 因 B3 设置页实验目录可能与 exp.dir 不同；默认为 resolveExperimentDir(exp.dir)。
+ *  @param overrides.scriptRoot 脚本根（bat 树+config.env 的家，B3 解耦）；默认 resolveExperimentDir()（env/插件内置）。
  *  @param overrides.maxPercBaseline 已被 insar_pipeline 写进 config.env（bat 读 %MAX_PERC_BASELINE%），此处仅透传。 */
 async function defaultRunStep(
   exp: Experiment,
@@ -433,7 +440,7 @@ async function defaultRunStep(
   overrides?: Record<string, unknown>,
 ): Promise<{ ok: boolean; step: string }> {
   const experimentRoot = resolveExperimentDir(
-    (overrides?.experimentRoot as string | undefined) ?? exp.dir,
+    (overrides?.scriptRoot as string | undefined) || undefined,
   );
   const batName = stepToBat(step);
   const batPath = join(experimentRoot, "bat", batName);

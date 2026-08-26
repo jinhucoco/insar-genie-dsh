@@ -80,7 +80,7 @@ dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w
 
 | 工具 | 作用 |
 |---|---|
-| `insar_pipeline` | **一键全自动编排 SBAS**（B1 两阶段确认后跑）：默认返回 5 卡参数确认（`pipeline.cards`）+ config.env 不执行；`confirmed=true` 才真正执行五步，并带连接图门 + 参数一致性门。实验目录优先用设置 `experimentDir`（B3）；扩基线时重写 config.env 的 `MAX_PERC_BASELINE` 确保 bat 读到（B2）|
+| `insar_pipeline` | **一键全自动编排 SBAS**（B1 两阶段确认后跑）：默认返回 5 卡参数确认（`pipeline.cards`）+ config.env 不执行；`confirmed=true` 才真正执行五步，并带连接图门 + 参数一致性门。脚本家=设置 `scriptsDir`（空=插件内置），数据根=`experimentDir`/exp.dir（B3 解耦）；扩基线时重写脚本根的 config.env 确保 bat 读到 2%→4%（B2）|
 | `insar_run` | 执行 Sentinel-1 SLC 下载（内置 `assets/scripts/multi_download.py`；`scriptDir` 可选，默认内置目录，可用 `INSAR_GENIE_SCRIPTS` 环境变量或参数覆盖；--list 或 --aoi/--start/--end + --pol/--out，不设超时）|
 | `insar_experiment` | 单步执行 SARscape 批处理（内置 assets/experiment/bat/<step>/<bat>；step=import_slc/cg/interf/dem/gacos_bulk/gacos_import/inv1/inv2/geocode）。`insar_pipeline` 自动编排内部委托它，无需手动调用 |
 | `insar_status` | 读取实验状态（解析 auxiliary.sml / step_performed.sml / guard 日志；进度与 ETA）|
@@ -134,7 +134,8 @@ npm 的 `^0.1.0` **只匹配 `0.1.x`**（0.x 的 minor 视为 breaking）。所�
 - gacosEmail / gacosImapAuthCode：GACOS 邮箱 + IMAP 授权码
 - enviIdl / sarscapeLib：ENVI/SARscape 路径（**启动时自动探测**，无需手填）
 - workDir / poeorbDir：数据目录（POEORB 默认 <实验目录>/poeorb；gacos/dem/slc 目录由实验目录管理）
-- experimentDir：实验目录（**B3**——`insar_pipeline` 优先用它作实验根目录，需含 `bat/`（内置五步 bat + config.env）；未配置则回退到实验记录 `exp.dir`）
+- scriptsDir：**脚本根（解耦）**——五步 bat 树 + config.env 的家；**留空 = 插件内置 assets/experiment（开箱即用）**。多实验共享一份脚本（串行跑），config.env 每次运行前重写
+- experimentDir：实验数据根（RESULT_ROOT/TMP_DIR 所在）；留空回退注册的 exp.dir。实验目录回归纯数据，无需复制 bat
 
 ## 防呆铁律
 

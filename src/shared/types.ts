@@ -59,6 +59,8 @@ export interface ExperimentParams {
   geocodeGridSize: number;         // 地理编码网格（与多视匹配）
   useGacos: boolean;
   demFile: string;
+  /** 连接图中央超参考（SLC msc_slc_list 完整路径）；空 = 走 bat 内置兑底（历史民勤清单，仅适用同类数据） */
+  superReference?: string;
 }
 
 /** 连接图校验结果 */

@@ -2,6 +2,15 @@
 
 本文件记录 `@jinhucoco/insar-genie-dsh` 的版本历史。遵循 [Keep a Changelog](https://keepachangelog.com/) 语义版本。
 
+## [0.1.1] - 2026-08-25
+
+### 脚本根与实验目录解耦 + 超参考参数化
+
+- **新增设置 `scriptsDir`（脚本根）**：五步 bat 树 + config.env 的家；**留空 = 插件内置 assets/experiment（开箱即用）**。与 `experimentDir`（实验数据根）彻底解耦——实验目录回归纯数据，无需再复制插件 bat 到实验目录。单实验串行跑，多实验共享同一份脚本；config.env 每次运行前由 pipeline 重写（含扩基线后的最终基线）。
+- **超参考参数化 `SUPER_REFERENCE`**：`run_cg_final.bat` 的中央超参考改从 config.env 读 `%SUPER_REFERENCE%`（对应注册参数 `params.superReference`），留空走 bat 内置兑底（民勤 sentinel1_135_20230112… 清单）。换新研究区不再需要手改 bat，确认卡①也展示该项供用户填写。
+- `defaultRunStep` 经 overrides.scriptRoot 定位 bat；返回值新增 `scriptRoot` / `experimentDir` 字段。
+- 测试 122 → 124（脚本根/数据根分离、SUPER_REFERENCE 写入）。
+
 ## [0.1.0] - 2026-08-25
 
 ### 首发（已发布 npm + GitHub 远程）
