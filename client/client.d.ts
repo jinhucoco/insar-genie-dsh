@@ -15,6 +15,7 @@ interface SettingsShape {
   sarscapeLib: string;
   workDir: string;
   poeorbDir: string;
+  experimentDir: string;
 }
 /** 目录列出一级（与 host 返回的 DirectoryListing 对齐；client 独立声明避免 host 依赖）。 */
 interface DirectoryListing {

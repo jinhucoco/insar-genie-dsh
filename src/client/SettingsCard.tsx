@@ -11,7 +11,6 @@ export interface SettingsShape {
   sarscapeLib: string;
   workDir: string;
   poeorbDir: string;
-  scriptsDir: string;
   experimentDir: string;
 }
 
@@ -24,7 +23,6 @@ export const DEFAULT_SETTINGS: SettingsShape = {
   sarscapeLib: "",
   workDir: "G:\\",
   poeorbDir: "",
-  scriptsDir: "",
   experimentDir: "",
 };
 
@@ -35,15 +33,14 @@ const FIELD_LABELS: Record<keyof SettingsShape, string> = {
   gacosImapAuthCode: "GACOS 邮箱 IMAP 授权码",
   enviIdl: "ENVI IDL 路径",
   sarscapeLib: "SARscape 路径",
-  workDir: "工作目录",
+  workDir: "实验预处理数据目录",
   poeorbDir: "POEORB 目录",
-  scriptsDir: "脚本根（bat树+config.env；空=插件内置）",
-  experimentDir: "实验数据根（空=注册的exp.dir）",
+  experimentDir: "实验结果存放目录（留空=注册的 exp.dir）",
 };
 
 /** 通过"应用内目录浏览器"设置的**文件夹**字段（browse 后端 -> listDirectory）。
  *  （enviIdl/sarscapeLib 虽也是路径，但指向可执行文件，未纳入文件夹浏览。） */
-const FOLDER_FIELDS: (keyof SettingsShape)[] = ["workDir", "poeorbDir", "scriptsDir", "experimentDir"];
+const FOLDER_FIELDS: (keyof SettingsShape)[] = ["workDir", "poeorbDir", "experimentDir"];
 
 /**
  * 规范化用户输入的路径，使 browse 后端能接受（它只认"真正限定的绝对路径"）。

@@ -9,6 +9,7 @@ export interface SettingsShape {
     sarscapeLib: string;
     workDir: string;
     poeorbDir: string;
+    experimentDir: string;
 }
 export declare const DEFAULT_SETTINGS: SettingsShape;
 /**

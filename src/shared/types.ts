@@ -66,8 +66,9 @@ export interface ExperimentParams {
 /** 连接图校验结果 */
 export interface ConnectionGraphCheck {
   isolatedCount: number;           // 孤立景数
-  passed: boolean;                 // isolatedCount <= 4
+  passed: boolean;                 // isolatedCount <= 4（报告缺失时 false，不静默通过）
   message: string;
+  missingInfo: boolean;            // 找不到 CG_report.txt（需人工核，不静默通过）
 }
 
 /** 运行期参数一致性校验结果 */

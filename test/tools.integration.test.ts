@@ -208,3 +208,45 @@ describe("resolveGuardLog → guardDir 优先定位 guard 日志", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("insar_status → 真实 CG 目录布局下读 auxiliary.sml / step_performed", () => {
+  function registerInsarStatus(dir: string): Tool {
+    const registry = createRegistry(join(dir, "registry"));
+    const registered: Tool[] = [];
+    const ctx: any = { tools: { register: (t: Tool) => registered.push(t) } };
+    registerTools(ctx, { registry });
+    const t = registered.find((x) => x.name === "insar_status");
+    if (!t) throw new Error("insar_status not registered");
+    const id = registry.create({
+      name: "demo", terrain: "desert", dir: join(dir, "exp"),
+      dataDirs: { slc: "", poeorb: "", gacos: "", dem: "" },
+      params: { maxPercBaseline: 2 } as never, status: "running",
+    });
+    return { ...t, experimentId: id } as never;
+  }
+
+  it("辅助文件在 CG_*_SBAS_processing/ 下时能读到（此前读 exp.dir 死路径失败）", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "insar-status-"));
+    const cgDir = join(dir, "exp", "CG_demo_SBAS_processing");
+    mkdirSync(join(cgDir, "work"), { recursive: true });
+    writeFileSync(join(cgDir, "auxiliary.sml"), '<sml><generate_connection_graph>OK</generate_connection_graph><interf_stack>NotOK</interf_stack></sml>');
+    writeFileSync(join(cgDir, "work", "sbas_step_performed.sml"), '<sml><pair_list><MatrixInteger NumberOfRows = "10" NumberOfColumns = "3"><MatrixRowInteger ID = "0"><ValueInteger ID = "2">1</ValueInteger></MatrixRowInteger></MatrixInteger></pair_list></sml>');
+    const t = registerInsarStatus(dir);
+    const out = await t.execute({ experimentId: t.experimentId });
+    const status = out as { step: string; stepIndex: number; totalPairs: number; donePairs: number };
+    expect(status.step).toBe("interf_stack");
+    expect(status.stepIndex).toBe(1);
+    expect(status.totalPairs).toBe(10);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("auxiliary.sml 缺失时返回结构化 error（不再凭空报进度）", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "insar-status-"));
+    const t = registerInsarStatus(dir);
+    const out = await t.execute({ experimentId: t.experimentId });
+    const status = out as { error?: { code: string }; progressLabel: string };
+    expect(status.error?.code).toBe("no-auxiliary");
+    expect(status.progressLabel).toBe("无法读取进度文件");
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deriveLooks, checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot, buildPipelineCards } from "../src/host/pipeline.js";
@@ -71,6 +71,7 @@ describe("checkConnectionGraph（孤立景数）", () => {
     const r = checkConnectionGraph(dir);
     expect(r.passed).toBe(true);
     expect(r.isolatedCount).toBe(3);
+    expect(r.missingInfo).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
   it("孤立景数 >4 → 不通过", () => {
@@ -79,6 +80,39 @@ describe("checkConnectionGraph（孤立景数）", () => {
     const r = checkConnectionGraph(dir);
     expect(r.passed).toBe(false);
     expect(r.isolatedCount).toBe(9);
+    expect(r.missingInfo).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("真实布局：CG_*_SBAS_processing/connection_graph/CG_report.txt 被探测到（expDir 根无报告）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cg-"));
+    const cg = join(dir, "CG_demo_SBAS_processing", "connection_graph");
+    mkdirSync(cg, { recursive: true });
+    writeFileSync(join(cg, "CG_report.txt"), "isolated acquisitions: 2");
+    const r = checkConnectionGraph(dir);
+    expect(r.passed).toBe(true);
+    expect(r.isolatedCount).toBe(2);
+    expect(r.missingInfo).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("experimentDir （数据根 ≠ exp.dir）优先：报告在数据根的 CG_* 下", () => {
+    const root = mkdtempSync(join(tmpdir(), "cg-"));
+    const expDir = join(root, "exp"); // 实验登记目录（无产物）
+    const dataRoot = join(root, "data"); // settings.experimentDir
+    const cg = join(dataRoot, "CG_demo_SBAS_processing", "connection_graph");
+    mkdirSync(cg, { recursive: true });
+    writeFileSync(join(cg, "CG_report.txt"), "isolated acquisitions: 7");
+    const r = checkConnectionGraph(expDir, dataRoot);
+    expect(r.passed).toBe(false);
+    expect(r.isolatedCount).toBe(7);
+    rmSync(root, { recursive: true, force: true });
+  });
+  it("找不到 CG_report.txt → passed=false + missingInfo=true（不静默通过）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cg-"));
+    const r = checkConnectionGraph(dir);
+    expect(r.passed).toBe(false);
+    expect(r.missingInfo).toBe(true);
+    expect(r.isolatedCount).toBe(0);
+    expect(r.message).toContain("找不到 CG_report.txt");
     rmSync(dir, { recursive: true, force: true });
   });
 });

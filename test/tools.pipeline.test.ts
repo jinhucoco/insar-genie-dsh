@@ -222,26 +222,28 @@ describe("insar_pipeline 编排", () => {
     expect(out).toMatchObject({ ok: true });
   });
 
-  it("B3 解耦：scriptsDir 定脚本根（config.env 目标+runStep），experimentDir 定数据根（resultRoot）", async () => {
+  it("脚本根自动（插件内置）+ experimentDir 定数据根（resultRoot）：config.env 写内置，数据在设置根", async () => {
     const expSettingsDir = mkdtempSync(join(tmpdir(), "insar-exp-"));
-    const scriptSettingsDir = mkdtempSync(join(tmpdir(), "insar-scripts-"));
     checkConnectionGraphMock.mockReturnValue({ isolatedCount: 0, passed: true, message: "OK" });
     checkParamsConsistencyMock.mockReturnValue({ mismatches: [], passed: true, message: "一致", missingInfo: false, unverified: [] });
-    const p = registerPipelineTool(dir, runStepMock, { experimentDir: expSettingsDir, scriptsDir: scriptSettingsDir });
+    const p = registerPipelineTool(dir, runStepMock, { experimentDir: expSettingsDir });
 
     const out = await p.execute({ experimentId: p.__experimentId, confirmed: true });
 
-    // config.env 写到脚本根（scriptsDir），而非实验目录/插件内置
-    const [cfgTarget, envInput] = writeConfigEnvMock.mock.calls[0];
-    expect(cfgTarget).toBe(scriptSettingsDir);
-    expect(envInput.resultRoot).toBe(expSettingsDir); // 数据根用设置页 experimentDir（非 exp.dir）
-    // 每步 runStep 的 overrides.scriptRoot 指向脚本根
+    // 脚本根 = 插件内置自动（resolveExperimentDir() 无 settings 干预），非实验目录
+    const [cfgTarget] = writeConfigEnvMock.mock.calls[0];
+    expect(cfgTarget).toBe(resolveExperimentDir());
+    expect(cfgTarget).not.toBe(expSettingsDir);
+    expect(cfgTarget).not.toBe(dir);
+    // 数据根用设置页 experimentDir（非 exp.dir）
+    const [, envInput] = writeConfigEnvMock.mock.calls[0];
+    expect(envInput.resultRoot).toBe(expSettingsDir);
+    // 每步 runStep 的 overrides.scriptRoot 指向内置脚本根
     const roots = runStepMock.mock.calls.map((c) => c[2]?.scriptRoot);
-    expect(roots.every((r: unknown) => r === scriptSettingsDir)).toBe(true);
-    // 返回值同时暴露两个根
-    expect(out).toMatchObject({ scriptRoot: scriptSettingsDir, experimentDir: expSettingsDir });
+    expect(roots.every((r: unknown) => r === resolveExperimentDir())).toBe(true);
+    // 返回值暴露两个根
+    expect(out).toMatchObject({ scriptRoot: resolveExperimentDir(), experimentDir: expSettingsDir });
     rmSync(expSettingsDir, { recursive: true, force: true });
-    rmSync(scriptSettingsDir, { recursive: true, force: true });
   });
 
   it("SUPER_REFERENCE：注册参数 params.superReference 非空时写入 config.env", async () => {
@@ -257,7 +259,7 @@ describe("insar_pipeline 编排", () => {
     const registered: Tool[] = [];
     registerTools({ tools: { register: (t: Tool) => registered.push(t) } } as never, {
       registry,
-      settings: { get: () => ({ ...TEST_SETTINGS, scriptsDir: join(dir, "scripts") }) } as never,
+      settings: { get: () => TEST_SETTINGS as never },
       runStep: runStepMock as never,
     });
     const tool = registered.find((t) => t.name === "insar_pipeline")!;

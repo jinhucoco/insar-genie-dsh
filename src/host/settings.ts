@@ -20,11 +20,10 @@ export const SettingsSchema = z.object({
   workDir: z.string().default("G:\\"),
   /** 精密轨道目录：默认 <实验目录>/poeorb，可覆盖为公共轨道库（**不探测**，用户自选存储位置） */
   poeorbDir: z.string().default(""),
-  /** 实验数据根（B3：RESULT_ROOT/TMP_DIR 等数据所在；非空时替代注册的 exp.dir，留空回退 exp.dir） */
+  /** 实验结果存放目录（B3：RESULT_ROOT/TMP_DIR 等 SARscape 输出所在；非空时替代注册的 exp.dir，留空回退 exp.dir）。
+   *  注意：脚本根不在此配置——五步 bat 树 + config.env 始终来自插件内置 assets/experiment
+   *  （高级用户可用 INSAR_GENIE_EXPERIMENT 环境变量覆盖），开箱即用、多实验共享一份脚本。 */
   experimentDir: z.string().default(""),
-  /** 脚本根（解耦）：五步 bat 树 + config.env 的家；空 = 插件内置 assets/experiment（开箱即用）。
-   *  多实验共享一份脚本（串行跑），config.env 每次运行前由 insar_pipeline 重写到此处。 */
-  scriptsDir: z.string().default(""),
 });
 export type Settings = ReturnType<typeof SettingsSchema>;
 

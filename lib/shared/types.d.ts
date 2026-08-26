@@ -57,6 +57,7 @@ export interface ConnectionGraphCheck {
     isolatedCount: number;
     passed: boolean;
     message: string;
+    missingInfo: boolean;
 }
 /** 运行期参数一致性校验结果 */
 export interface ParamsConsistencyCheck {

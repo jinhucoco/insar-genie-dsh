@@ -6,7 +6,7 @@ import { getTemplate, validateBaseline } from "./templates.js";
 import { createRegistry } from "./registry.js";
 import { computeStatus } from "./status.js";
 import { runPython } from "./runner.js";
-import { resolveScriptsDir, resolveExperimentDir, hasBundledScripts } from "./paths.js";
+import { resolveScriptsDir, resolveExperimentDir, hasBundledScripts, resolveCgDir } from "./paths.js";
 import { writeConfigEnv, type ConfigEnvInput } from "./configenv.js";
 import { checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot, buildPipelineCards, type PipelineCard } from "./pipeline.js";
 import type { Experiment, ExperimentParams, TerrainType } from "../shared/types.js";
@@ -21,10 +21,8 @@ export interface SettingsValue {
   sarscapeLib: string;
   workDir: string;
   poeorbDir: string;
-  /** B3：实验数据根（非空时替代注册的 exp.dir 作为 RESULT_ROOT/TMP_DIR 家） */
+  /** B3：实验结果存放目录（非空时替代注册的 exp.dir 作为 RESULT_ROOT/TMP_DIR 家） */
   experimentDir?: string;
-  /** 脚本根（解耦）：五步 bat 树 + config.env 的家；空 = 插件内置 assets/experiment */
-  scriptsDir?: string;
 }
 
 /** 编排执行单步：runStep(exp, step, overrides)。overrides 可覆盖基线等，便于测试断言分派。 */
@@ -133,8 +131,24 @@ export function registerTools(
     execute(input: { experimentId: string }) {
       const exp = deps.registry.get(input.experimentId);
       if (!exp) throw new Error(`experiment not found: ${input.experimentId}`);
-      const auxXml = readFileSafe(join(exp.dir, "auxiliary.sml"), "");
-      const stepXml = readFileSafe(join(exp.dir, "work", "work_step_performed.sml"), "");
+      // 真实布局：auxiliary.sml / sbas_step_performed.sml 在 CG 目录（<数据根>/CG_*_SBAS_processing/）下，
+      // 由 resolveCgDir 探测（settings.experimentDir 优先，回退 exp.dir 扫描 CG_*）。
+      const s = deps.settings?.get();
+      const cgDir = resolveCgDir(exp.dir, s?.experimentDir);
+      const auxXml = readFileSafe(join(cgDir, "auxiliary.sml"), "");
+      // SARscape 配对进度文件：sbas_step_performed.sml（CG 目录根的 work/ 或根下；fixture 名 step_performed.sml 兼容）
+      const stepCandidates = [
+        join(cgDir, "work", "sbas_step_performed.sml"),
+        join(cgDir, "sbas_step_performed.sml"),
+        join(cgDir, "work", "work_step_performed.sml"),
+        join(cgDir, "work_step_performed.sml"),
+        join(cgDir, "work", "step_performed.sml"),
+        join(cgDir, "step_performed.sml"),
+      ];
+      const stepXml = readFileSafe(
+        stepCandidates.find((p) => existsSync(p)) ?? join(cgDir, "work", "work_step_performed.sml"),
+        "",
+      );
       // guard 日志：探测候选路径（真实布局 guard 日志在 workDir/asf_experiment，不在实验目录附近）
       const guardLog = readFileSafe(resolveGuardLog(exp), "");
       // 注：status.ts 的参数名是 stepPerformedXml（简报原文 stepXml 与现有代码不一致，已适配）
@@ -281,7 +295,6 @@ export function registerTools(
         sarscapeLib: s?.sarscapeLib ?? "",
         workDir: s?.workDir ?? "",
         poeorbDir: s?.poeorbDir ?? "",
-        scriptsDir: s?.scriptsDir ?? "",
         experimentDir: s?.experimentDir ?? "",
       } as never);
     },
@@ -303,12 +316,11 @@ export function registerTools(
       const s = deps.settings?.get();
       if (!s) throw new Error("insar_pipeline: settings not configured (ASF/ENVI/SARscape paths)");
 
-      // B3 扩展（解耦）：脚本根(scriptsDir，空=插件内置 assets/experiment) 与 实验数据根(experimentDir，空=exp.dir) 分离。
+      // B3 解耦：脚本根始终自动（插件内置 assets/experiment，env INSAR_GENIE_EXPERIMENT 可覆盖；
+      // 不读设置——用户无需配置脚本位置），实验结果存放目录（experimentDir，空=exp.dir）分管数据。
       // config.env 写到脚本根（bat 用 %~dp0..\..\config.env 在脚本根找它）；数据全靠 config.env 里的绝对路径。
       const expDataDir = s.experimentDir && s.experimentDir.trim() ? s.experimentDir : exp.dir;
-      const scriptRoot = resolveExperimentDir(
-        s.scriptsDir && s.scriptsDir.trim() ? s.scriptsDir : undefined,
-      );
+      const scriptRoot = resolveExperimentDir();
       const tmpDir = join(expDataDir, "tmp");
       const baseEnv: ConfigEnvInput = {
         workDir: s.workDir,
@@ -359,14 +371,17 @@ export function registerTools(
       let cgCheck: ReturnType<typeof checkConnectionGraph> = {
         isolatedCount: 0,
         passed: false,
+        missingInfo: false,
         message: "连接图未运行",
       };
       for (let attempt = 0; attempt < 3; attempt++) {
         // B2: 先把当前基线写进 config.env（bat 读 %MAX_PERC_BASELINE%），确保扩基线真正生效。
         writeBaselineEnv(maxPercBaseline);
         await runStep(exp, "cg", { maxPercBaseline, scriptRoot });
-        cgCheck = checkConnectionGraph(expDataDir);
+        // CG_report 在实验结果存放目录（RESULT_ROOT）下的 CG_*_SBAS_processing/connection_graph/
+        cgCheck = checkConnectionGraph(expDataDir, expDataDir);
         if (cgCheck.passed) break;
+        if (cgCheck.missingInfo) break; // 报告缺失不可重试，留给上层报错
         if (maxPercBaseline >= 4) break; // 铁律 2-4%，已到上限仍不合格
         maxPercBaseline = 4;
       }

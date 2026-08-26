@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { looksFromGridSize, getTemplate } from "./templates.js";
+import { resolveCgDir } from "./paths.js";
 import type { ConnectionGraphCheck, ExperimentParams, ParamsConsistencyCheck, TerrainType } from "../shared/types.js";
 
 /** 由 gridSize 推导多视：有地形用模板值（地形优先），否则 looksFromGridSize 兑底（30m→8:2 / 15m→4:1）。 */
@@ -12,16 +13,37 @@ export function deriveLooks(gridSize: number, terrain?: string): { rgLooks: numb
   return looksFromGridSize(gridSize);
 }
 
-/** 连接图校验：读 CG_report.txt 的孤立景数，≤4 通过。 */
-export function checkConnectionGraph(workDir: string): ConnectionGraphCheck {
-  const report = join(workDir, "CG_report.txt");
-  let text = "";
-  if (existsSync(report)) text = readFileSync(report, "utf8");
+/** 连接图校验：读 CG_report.txt 的孤立景数，≤4 通过。
+ *  report 真实布局在 CG 目录下：<实验根>/CG_xxx_SBAS_processing/connection_graph/CG_report.txt
+ *  （guard 脚本权威；旧布局 <实验根>/CG_report.txt 亦兼容，按存在性探测）。
+ *  找不到报告 → passed=false + missingInfo=true（不静默通过，与参数一致性门同语义）。
+ *  @param expDir 实验根目录（compDir 自动探测）
+ *  @param experimentDir 可选：settings.experimentDir 显式实验数据根（优先） */
+export function checkConnectionGraph(
+  expDir: string,
+  experimentDir?: string,
+): ConnectionGraphCheck {
+  const cgDir = resolveCgDir(expDir, experimentDir);
+  // 候选 1：真实布局 CG 目录下的 connection_graph/
+  const nested = join(cgDir, "connection_graph", "CG_report.txt");
+  // 候选 2：CG 目录根下（旧布局/自定义输出）
+  const root = join(cgDir, "CG_report.txt");
+  const report = existsSync(nested) ? nested : existsSync(root) ? root : "";
+  if (!report) {
+    return {
+      isolatedCount: 0,
+      passed: false,
+      missingInfo: true,
+      message: `找不到 CG_report.txt（探测过 ${cgDir}/connection_graph/ 与 ${cgDir}/），无法校验连接图（需人工核）`,
+    };
+  }
+  const text = readFileSync(report, "utf8");
   const m = /isolated\s+acquisitions?\s*[:=]\s*(\d+)/i.exec(text);
   const isolated = m ? Number(m[1]) : 0;
   return {
     isolatedCount: isolated,
     passed: isolated <= 4,
+    missingInfo: false,
     message: isolated <= 4 ? `连接图 OK：${isolated} 景孤立` : `连接图不合格：${isolated} 景孤立（>4），需扩基线`,
   };
 }

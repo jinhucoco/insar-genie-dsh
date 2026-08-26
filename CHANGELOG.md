@@ -2,6 +2,23 @@
 
 本文件记录 `@jinhucoco/insar-genie-dsh` 的版本历史。遵循 [Keep a Changelog](https://keepachangelog.com/) 语义版本。
 
+## [0.1.3] - 2026-08-26
+
+### 修复：连接图校验门与进度读取在真实目录布局下失效
+
+- **连接图校验门路径修正**：`checkConnectionGraph` 改为探测真实布局 `<数据根>/CG_*_SBAS_processing/connection_graph/CG_report.txt`（guard 脚本权威；旧布局 `<根>/CG_report.txt` 兼容）。此前只读 `<实验根>/CG_report.txt`，真实运行永远找不到文件 → 静默按 0 孤立通过，扩基线门永不触发。
+- **报告缺失不再静默通过**：找不到 `CG_report.txt` 时 `passed=false + missingInfo=true`（与参数一致性门同语义），`insar_pipeline` 直接报错留待人工核，不再盲目扩基线重试。
+- **`insar_status` 进度读取修正**：`auxiliary.sml` / `sbas_step_performed.sml` 改为探测 CG 目录（`resolveCgDir`：settings.experimentDir 优先 → exp.dir 下扫描 `CG_*_SBAS_processing` → 任意 `CG_*` 兑底）。此前读 `<exp.dir>/auxiliary.sml` 死路径，进度面板永远显示「无法读取进度文件」。
+- 测试 124 → 129（真实 CG 布局探测、experimentDir≠exp.dir、报告缺失不静默、insar_status 读 CG 目录、missing 结构化 error）。
+
+### 脚本根改为全自动（无需用户配置）
+
+- 设置项与 UI 移除 `scriptsDir`（脚本根）：五步 bat 树 + config.env 始终来自插件内置 `assets/experiment`（高级用户可用 `INSAR_GENIE_EXPERIMENT` 环境变量覆盖）。此前 UI 暴露「脚本根」字段误导用户以为必填。
+
+### 设置页字段改名
+
+- 「工作目录」→「实验预处理数据目录」；「实验数据根」→「实验结果存放目录」。字段键 `workDir` / `experimentDir` 不变（代码标识符，避免破坏 schema/持久化）。
+
 ## [0.1.2] - 2026-08-25
 
 ### 设置侧边栏补 scriptsDir / experimentDir 字段

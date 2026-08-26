@@ -4,8 +4,13 @@ export declare function deriveLooks(gridSize: number, terrain?: string): {
     rgLooks: number;
     azLooks: number;
 };
-/** 连接图校验：读 CG_report.txt 的孤立景数，≤4 通过。 */
-export declare function checkConnectionGraph(workDir: string): ConnectionGraphCheck;
+/** 连接图校验：读 CG_report.txt 的孤立景数，≤4 通过。
+ *  report 真实布局在 CG 目录下：<实验根>/CG_xxx_SBAS_processing/connection_graph/CG_report.txt
+ *  （guard 脚本权威；旧布局 <实验根>/CG_report.txt 亦兼容，按存在性探测）。
+ *  找不到报告 → passed=false + missingInfo=true（不静默通过，与参数一致性门同语义）。
+ *  @param expDir 实验根目录（compDir 自动探测）
+ *  @param experimentDir 可选：settings.experimentDir 显式实验数据根（优先） */
+export declare function checkConnectionGraph(expDir: string, experimentDir?: string): ConnectionGraphCheck;
 /** 运行期参数一致性校验：定位匹配模块的最新 PARAMETERS_INFO_*.xml，提取 key 与快照比对。
  *  @param workDir 工作目录（实验 tmp 下，含 PARAMETERS_INFO 落盘）
  *  @param params  确认快照（key 与落盘 XML 的 tag 对应，小写下划线）
