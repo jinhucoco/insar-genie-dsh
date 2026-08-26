@@ -12,6 +12,8 @@ export interface ConfigEnvInput {
     maxPercBaseline?: number;
     /** 时间基线（天）：连接图 bat 读 %MAX_TIME_BASELINE% */
     maxTimeBaselineDays?: number;
+    /** 连接图中央超参考（SLC msc_slc_list 路径）：bat 读 %SUPER_REFERENCE%；空 = bat 内置兑底 */
+    superReference?: string;
     slcRoi?: string;
     slcPolarization?: string;
     demRaw?: string;

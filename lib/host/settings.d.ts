@@ -16,8 +16,11 @@ export declare const SettingsSchema: z<Schemastery.ObjectS<{
     workDir: z<string, string>;
     /** 精密轨道目录：默认 <实验目录>/poeorb，可覆盖为公共轨道库（**不探测**，用户自选存储位置） */
     poeorbDir: z<string, string>;
-    /** 实验目录（B3：从设置页读取，作为 SBAS 实验根目录；非空时 insar_pipeline 用它替代 exp.dir） */
+    /** 实验数据根（B3：RESULT_ROOT/TMP_DIR 等数据所在；非空时替代注册的 exp.dir，留空回退 exp.dir） */
     experimentDir: z<string, string>;
+    /** 脚本根（解耦）：五步 bat 树 + config.env 的家；空 = 插件内置 assets/experiment（开箱即用）。
+     *  多实验共享一份脚本（串行跑），config.env 每次运行前由 insar_pipeline 重写到此处。 */
+    scriptsDir: z<string, string>;
 }>, Schemastery.ObjectT<{
     earthdataUser: z<string, string>;
     earthdataPassword: z<string, string>;
@@ -30,8 +33,11 @@ export declare const SettingsSchema: z<Schemastery.ObjectS<{
     workDir: z<string, string>;
     /** 精密轨道目录：默认 <实验目录>/poeorb，可覆盖为公共轨道库（**不探测**，用户自选存储位置） */
     poeorbDir: z<string, string>;
-    /** 实验目录（B3：从设置页读取，作为 SBAS 实验根目录；非空时 insar_pipeline 用它替代 exp.dir） */
+    /** 实验数据根（B3：RESULT_ROOT/TMP_DIR 等数据所在；非空时替代注册的 exp.dir，留空回退 exp.dir） */
     experimentDir: z<string, string>;
+    /** 脚本根（解耦）：五步 bat 树 + config.env 的家；空 = 插件内置 assets/experiment（开箱即用）。
+     *  多实验共享一份脚本（串行跑），config.env 每次运行前由 insar_pipeline 重写到此处。 */
+    scriptsDir: z<string, string>;
 }>>;
 export type Settings = ReturnType<typeof SettingsSchema>;
 /**

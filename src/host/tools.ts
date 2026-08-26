@@ -281,6 +281,8 @@ export function registerTools(
         sarscapeLib: s?.sarscapeLib ?? "",
         workDir: s?.workDir ?? "",
         poeorbDir: s?.poeorbDir ?? "",
+        scriptsDir: s?.scriptsDir ?? "",
+        experimentDir: s?.experimentDir ?? "",
       } as never);
     },
   }));

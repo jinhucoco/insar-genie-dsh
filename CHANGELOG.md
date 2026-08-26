@@ -2,6 +2,12 @@
 
 本文件记录 `@jinhucoco/insar-genie-dsh` 的版本历史。遵循 [Keep a Changelog](https://keepachangelog.com/) 语义版本。
 
+## [0.1.2] - 2026-08-25
+
+### 设置侧边栏补 scriptsDir / experimentDir 字段
+
+- SettingsCard 新增「脚本根」「实验数据根」两个文件夹字段（带目录浏览），用户可在 UI 直接填写；`insar_settings` 输出同步暴露两值。
+
 ## [0.1.1] - 2026-08-25
 
 ### 脚本根与实验目录解耦 + 超参考参数化
