@@ -123,6 +123,57 @@ export function registerTools(
   }));
 
   ctx.tools.register(defineTool({
+    name: "insar_import_bulk",
+    description:
+      "SLC 批量导入驱动 —— 按清单【时相(日期)】分组,每组调一次 ImportSentinel1Format。D11/D13 修复: 原 import_slc 步骤 file_search 抓目录全部 zip 无条件拼接,会把不同时相混拼;本工具按日期分组、同轨校验,组内(单帧或双帧)一起导入,由 SARscape 自动决定拼接(双帧→msc_slc_list 拼接,单帧→slc_list)。输出每个时相独立产物 + 断点续跑(跳过已完成时相)。参数: list=清单CSV, slcDir=zip目录, out=输出目录, aoi=研究区shp(可选,裁剪burst), pol=极化, onlyDate=只跑某天, skip=跳过前N时相。",
+    parameters: {
+      scriptDir: { type: "string", description: "Optional. Directory containing import_slc_bulk.py. Defaults to bundled assets/scripts." },
+      list: { type: "string", required: true, description: "Manifest CSV (columns: date,frame,orbit,satellite,file)." },
+      slcDir: { type: "string", required: true, description: "Directory containing SLC zip files." },
+      out: { type: "string", required: true, description: "Import output directory." },
+      aoi: { type: "string", description: "AOI shapefile (WGS84) — bursts clipped (optional)." },
+      pol: { type: "string", description: "Polarization. Defaults 'ONLY_VV_POL'." },
+      skip: { type: "number", description: "Skip first N dates (resume)." },
+      max: { type: "number", description: "Max dates to process (0=all)." },
+      onlyDate: { type: "string", description: "Process only this date YYYYMMDD." },
+      pythonBin: { type: "string", description: "Python executable. Defaults 'python'." },
+    },
+    output: JSON_OUTPUT,
+    async execute(input: {
+      scriptDir?: string;
+      list: string;
+      slcDir: string;
+      out: string;
+      aoi?: string;
+      pol?: string;
+      skip?: number;
+      max?: number;
+      onlyDate?: string;
+      pythonBin?: string;
+    }) {
+      const scriptDir = resolveScriptsDir(input.scriptDir);
+      if (!input.scriptDir && !process.env.INSAR_GENIE_SCRIPTS && !hasBundledScripts()) {
+        throw new Error("insar_import_bulk: import_slc_bulk.py not found. Pass scriptDir or set INSAR_GENIE_SCRIPTS.");
+      }
+      const args = ["import_slc_bulk.py",
+        "--list", input.list,
+        "--slc-dir", input.slcDir,
+        "--out", input.out,
+      ];
+      if (input.aoi) { args.push("--aoi", input.aoi); }
+      if (input.pol) { args.push("--pol", input.pol); }
+      if (input.skip != null) { args.push("--skip", String(input.skip)); }
+      if (input.max != null) { args.push("--max", String(input.max)); }
+      if (input.onlyDate) { args.push("--only-date", input.onlyDate); }
+      const result = await runPython(input.pythonBin ?? "python", args, scriptDir);
+      if (result.exitCode !== 0) {
+        throw new Error(`insar_import_bulk failed (exit ${result.exitCode}): ${result.stderr}`);
+      }
+      return { ok: true, args, scriptDir, stdout: result.stdout };
+    },
+  }));
+
+  ctx.tools.register(defineTool({
     name: "insar_status",
     description: "Read an experiment's current SBAS progress (connection graph → geocoding) from its status files.",
     parameters: {
