@@ -1,152 +1,86 @@
 # @jinhucoco/insar-genie-dsh
 
-SBAS-InSAR 全链路 DSH 插件：`insar_pipeline`（一键全自动编排 SBAS）+ `insar_run` / `insar_status` / `insar_templates` / `insar_register` / `insar_list` / `insar_experiment` / `insar_settings` 工具 + 参数防呆校验（2-4% 基线门禁 / 连接图校验门 / 参数一致性门）+ 实验注册表 + client UI（参数确认卡 / 进度面板 / 设置卡）。
+**DSH 插件：AI 对话驱动的 SBAS-InSAR 全流程自动化。**
 
-**开箱即用**：插件自带完整 SBAS 执行链（`assets/scripts/` 下载/配套数据工具 + `assets/experiment/` SARscape 五步 batch 与守护脚本）。安装插件后 `insar_run` / `insar_experiment` 自动使用内置脚本，**无需另装技能或手动传脚本路径**。
-
-## 脚本来源与同步（两仓约定）
-
-插件 `assets/scripts` + `assets/experiment` 里的 Python/bat 脚本**来自技能仓库 `jinhucoco/insar-genie`**（`scripts/` + `experiment/`），是其在插件的**发布副本**。
-
-> ⚠️ **方向铁律**：脚本**唯一源**在技能仓库 `jinhucoco/insar-genie`（dev 分支）。**必须先改技能仓库**，再用 `sync_assets.py --sync` **从技能仓库复制到插件 assets**。方向反了（改插件 assets → 复制到技能仓库）会导致两仓语义漂移。
-
-> 正确改脚本流程：
-> 1. 在技能仓库 `~/.../asf-sentinel1-download`（dev 分支）改 `scripts/` / `experiment/` / `SKILL.md`
-> 2. `git add -A && git commit && git push origin dev`（CI 的 sync 校验克隆的就是 dev）
-> 3. 在插件仓库跑 `python scripts/sync_assets.py --skill-repo <技能仓库> --sync` 同步到 assets
-> 4. `git add assets/ && git commit && git push origin main`
-
-**同步 / 校验（在插件 repo 根执行）**：
-
-```bash
-python scripts/sync_assets.py --skill-repo <技能仓库路径>    # 校验：报告不一致/缺失，不改动
-python scripts/sync_assets.py --skill-repo <技能仓库路径> --sync   # 同步：从技能仓库复制到 assets
-```
-
-> CI（`.github/workflows/test.yml`）会在 push 到 main 时自动 clone 技能仓库并跑 sync 校验，防止两仓漂移。
+从 Sentinel-1 数据下载、配套数据（DEM/GACOS/POEORB）获取，到 SARscape 参数确认与批处理执行，再到守护监控——你只需用自然语言说出需求（时间范围 + 研究区矢量 + 极化），AI 自动完成。
 
 ## 安装
 
 ```powershell
 dsh plugin --profile web add @jinhucoco/insar-genie-dsh -w
+restart dsh web   # 重启生效
 ```
 
-> **说明**：本包自包含——`lib/`（host 产物）+ `client/client.js`（client bundle）+ `assets/`（内嵌技能与全套脚本）均已入库，**clone 后开箱即用，无需再 build**。`prepublishOnly`/`prepack` 已钩住 `npm run build`，`npm publish` 时自动保证产物最新。
->
-> 发布到 npm：`npm publish --access public`（scoped 包必须 `--access public` 才免费公开；`@dsh-custom` 是公共 scope 无权限，用 `@jinhucoco` 账号自有 scope）。
->
-> Windows 本地开发用 `link:` 软链安装（`file:` 依赖的盘符冒号会被 pnpm 误解析，报 ENOENT）：
-> ```powershell
-> powershell -ExecutionPolicy Bypass -File install-dsh.ps1
-> ```
-> 改源码后 `npm run build`，重启 dsh web 即生效（软链，无需重复 install）。
+安装后插件自带全部脚本（`assets/`：下载工具 + SARscape 五步批处理 + 守护），**开箱即用，无需额外配置脚本路径**。
 
-## 使用
+## 快速开始
 
-- 对话：「跑 SBAS，区域 xxx.shp，2020-2025，VV」
-- AI 识别地形 → 调用 `insar_templates` 取模板 → 生成参数表 → 用户确认 → `insar_run` 执行下载（list 清单 CSV 或 aoi+start+end，同步 await，数小时级）
-- 注册实验：`insar_register`（写入注册表，记录参数快照，`maxPercBaseline` 防呆拦截非法值）
-- 实验运行中：`insar_status` 查询五步进度与剩余时间（速率按 guard 日志动态计算，无数据时兜底 0.22 对/分）
+安装后，直接在对话里说：
 
-## 全流程使用（装插件即跑）
+```
+「从 ASF 下载哨兵数据，区域 研究区.shp，时间 20200101 至 20251231，VV」
+「下载配套数据」
+「开始 SBAS 实验」
+「实验进展如何」
+```
 
-装好插件后，其他用户即可在对话中全流程跑 SBAS 实验，无需额外配置脚本：
+AI 会依次：
+1. **下载 SLC**：分析数据 → 生成下载清单 → 校验轨道一致性与研究区覆盖 → 下载
+2. **获取配套数据**：POEORB 精密轨道 / GACOS 大气延迟 / NASADEM DEM
+3. **参数确认**（重要）：识别研究区地形 → 给你 **5 张参数确认卡**（连接图 / 干涉 / 反演1 / 反演2 / 地理编码），每项标注默认值/推荐值/理由，**你确认后才执行**
+4. **执行实验**：连接图 → 干涉+解缠 → 反演 → 地理编码，每步带自动校验
+5. **全程守护&汇报**：进度面板实时显示，异常自动处理
 
-1. **首次配置**（设置 → insar-genie）：填 ASF 账号密码、GACOS 邮箱 + IMAP 授权码、实验目录 `experimentDir`；ENVI/SARscape 路径已自动探测，工作目录默认 `G:\`。
-2. **对话发起**：「跑 SBAS，区域 xxx.shp，2020-2025，VV」。
-3. AI 自动：
-   - 识别地形 → `insar_templates` 取模板 → 展示参数表（含 2-4% 基线防呆）
-   - **`insar_pipeline` 两阶段一键编排**：
-     - **阶段 1（确认前）**：`insar_pipeline(experimentId)` → 生成 **5 张参数确认卡**（每参数标默认/推荐/理由）+ 写 config.env，返回 `needsConfirm` 不执行；client 展示确认卡，用户逐项抉择
-     - **阶段 2（用户确认后）**：`insar_pipeline(experimentId, confirmed=true)` → 真正执行五步：连接图 → 干涉+解缠 → 反演1 → 反演2 → 地理编码，每步带校验门
-   - `insar_status` 汇报进度（进度面板实时显示）
-4. 需要自定义脚本位置时：设 `INSAR_GENIE_SCRIPTS` / `INSAR_GENIE_EXPERIMENT` 环境变量，或给 `insar_run` 的 `scriptDir` / `insar_experiment` 的 `experimentDir` 传值。
+## 首次配置（设置 → insar-genie）
 
-> 脚本路径解析优先级：显式参数 > 环境变量 > 插件内置 `assets/`（随包走，默认）。
+| 设置项 | 说明 |
+|---|---|
+| `earthdataUser` / `earthdataPassword` | NASA Earthdata 账号（ASF 下载 + DEM 下载用）|
+| `gacosEmail` / `gacosImapAuthCode` | 接收 GACOS 结果的邮箱 + IMAP 授权码（用 GACOS 时）|
+| `enviIdl` / `sarscapeLib` | ENVI / SARscape 路径 —— **启动时自动探测，一般无需手填** |
+| `workDir` / `poeorbDir` / `experimentDir` | 数据与实验目录 |
 
-### insar_pipeline 三张强制校验门（全自动核心）
+> 账号免费注册：https://urs.earthdata.nasa.gov/（ASF 用）
 
-`insar_pipeline` 每步执行前/后都带防呆门，绝不带病进下一步：
-
-1. **2% 空间基线铁律**：`MAX_PERC_BASELINE` 初始 2%（用户方法论，勿用 SARscape 默认 45%）。
-2. **连接图校验门**：跑完 `CG_report.txt` 读孤立景数，**>4 → 自动扩基线 2%→4% 重跑**（铁律上限 4%，最多 3 次），仍不合格则中断上报。
-3. **参数一致性门**：每步后读 `tmp/*/work/PARAMETERS_INFO_*.xml` **实际落盘值** vs **用户确认的参数快照**，不一致即告警/中断（`ignoreInconsistency=true` 可跳过）。
-
-> 多视推导（方案 A）：用户只设 **Grid Size**（15/30m），`insar_pipeline` 按映射规则显式推导 RG/AZ Looks（如 15m→4:1~5:1），并展示在确认卡上供用户确认。
-
-> 参数快照构建：**在连接图扩基线确定最终 `maxPercBaseline` 之后**构建（避免扩基线后快照与实际运行基线不一致导致校验误报）。
-
-## 工具
+## 工具一览
 
 | 工具 | 作用 |
 |---|---|
-| `insar_pipeline` | **一键全自动编排 SBAS**（B1 两阶段确认后跑）：默认返回 5 卡参数确认（`pipeline.cards`）+ config.env 不执行；`confirmed=true` 才真正执行五步，并带连接图门 + 参数一致性门。脚本家=设置 `scriptsDir`（空=插件内置），数据根=`experimentDir`/exp.dir（B3 解耦）；扩基线时重写脚本根的 config.env 确保 bat 读到 2%→4%（B2）|
-| `insar_run` | 执行 Sentinel-1 SLC 下载（内置 `assets/scripts/multi_download.py`；`scriptDir` 可选，默认内置目录，可用 `INSAR_GENIE_SCRIPTS` 环境变量或参数覆盖；--list 或 --aoi/--start/--end + --pol/--out，不设超时）|
-| `insar_experiment` | 单步执行 SARscape 批处理（内置 assets/experiment/bat/<step>/<bat>；step=import_slc/cg/interf/dem/gacos_bulk/gacos_import/inv1/inv2/geocode）。`insar_pipeline` 自动编排内部委托它，无需手动调用 |
-| `insar_status` | 读取实验状态（解析 auxiliary.sml / step_performed.sml / guard 日志；进度与 ETA）|
+| `insar_pipeline` | **一键全自动编排 SBAS**。两阶段：先出 5 卡参数确认（不执行）→ 你确认后 `confirmed=true` 才真正执行五步 |
+| `insar_run` | 下载 Sentinel-1 SLC（清单 CSV 或 AOI+时间范围驱动，数小时级同步等待）|
+| `insar_import_bulk` | **批量导入 SLC**：按清单时相（日期）分组自动导入，双帧自动拼接、单帧不拼，支持续跑/ROI 裁剪 |
+| `insar_experiment` | 单步执行 SARscape 批处理（import/cg/interf/dem/gacos/inv1/inv2/geocode）——`insar_pipeline` 内部委托它，一般无需手动调 |
+| `insar_status` | 查询实验进度与预计完成时间 |
 | `insar_templates` | 按地形返回参数模板（矿区/滑坡/城市/沙漠/黄土高原）|
-| `insar_register` | 注册新实验到注册表（记录参数快照，返回 id；防呆校验基线）|
-| `insar_list` | 列出已注册实验（id/name/terrain/status）|
-| `insar_settings` | 读取解析后的设置值（含启动探测的 ENVI/SARscape 路径）|
+| `insar_register` | 注册实验（记录目录与参数快照，返回实验 id）|
+| `insar_list` | 列出已注册实验 |
+| `insar_settings` | 读取当前设置 |
 
-## 版本维护
+## 关键机制（自动防呆）
 
-### 如何让用户升级到新版本
+- **空间基线铁律 2%-4%**：连接图空间基线初始 2%，勿用 SARscape 默认 45%（长基线在低相干区配准极慢）。连接图孤立景数 >4 时自动扩到 4% 重跑。
+- **参数确认再执行**：任何实验跑之前，AI 都会先给你参数表（带默认/推荐/理由），你确认或修改后才执行。修改的参数在确认后通过 `paramOverrides` 生效。
+- **参数一致性校验**：每步执行后比对 SARscape 实际落盘参数与你确认的快照，不一致即告警，绝不带病进下一步。
+- **按时相分组导入**：SLC 导入按"时相（日期）"分组——同一天多帧一起导（自动拼接成 msc SLC 列表），不同时相绝不混拼。
+- **守护自愈**：长下载/导入由守护 + 计划任务托管，宿主重启后自动续跑。
 
-用户安装时 `dsh plugin add` 会写入 **`^` 范围**（如 `^0.1.0`）。你发布新版本后，用户用：
+## 常见问题
 
-```bash
-# 升级到当前范围（如 ^0.1.0）内最新
-cd ~/.dsh/profiles/web && pnpm update @jinhucoco/insar-genie-dsh
-# 或（更简洁）
-dsh plugin --profile web update @jinhucoco/insar-genie-dsh
-# 重启 dsh web 生效
-```
-
-### 你发布新版本（一键脚本）
-
-```bash
-bash .release.sh patch      # bug 修复/文档 (0.1.0 → 0.1.1) — 用户 pnpm update 能自动拿到
-bash .release.sh minor      # 新功能/非 breaking (0.1.0 → 0.2.0)
-bash .release.sh major      # breaking (→ 1.0.0)
-bash .release.sh --dry-run  # 预览流程, 不实际发布
-```
-
-`.release.sh` 自动：校验两仓资产一致 → bump 版本 → `npm run build` → `npm publish --access public` → push git tag（触发 CI）。
-
-### ⚠️ 版本范围陷阱（0.x 敏感）
-
-npm 的 `^0.1.0` **只匹配 `0.1.x`**（0.x 的 minor 视为 breaking）。所以：
-
-| 你发 | 用户 `pnpm update` 能否拿到 |
+| 问题 | 处理 |
 |---|---|
-| `0.1.1`（patch）| ✅ 能 |
-| `0.2.0`（minor，含新功能）| ❌ 不能 |
-| `1.0.0`（major）| ❌ 不能 |
+| 下载时是否需要代理 | 系统代理开着时脚本会自动走代理（更稳更快）；深夜/空闲时段网速好时自动加速 |
+| 搜索 VV 返回 0 结果 | CMR 中该区域 SLC 极化属性是 `VV+VH`（双极化），用 `VV+VH` 下载、导入时取 `ONLY_VV_POL` 即得 VV |
+| 有没有 pwr 强度图 | 导入默认生成（`Make Power QL`），用于目视检查 AOI 覆盖 |
+| SARscape 批处理失败如何查 | 看 `<临时目录>/work/Process.trace` 的 `[SARS_LOG]`/`EC=70000` 行（批处理 stdout 不含执行细节）|
+| 换新研究区 | 把新研究区 shp 告诉 AI，重新走「开始 SBAS 实验」；AI 会识别地形、给新参数、重新下载配套数据 |
 
-> 想让用户自动升级新功能（minor），需用户在 `^0.1.0` 范围内等 patch，或手动升级。**建议**：插件稳定后再升 `1.0.0`，此后 `^1.0.0` 能自动升级所有 `1.x`。
+## 需要本地环境
 
-> **发布前必须**：改插件 `assets/`（脚本/SKILL.md）时，先改**技能仓库 `jinhucoco/insar-genie` dev**，再 `scripts/sync_assets.py --sync`，最后发布——否则 CI 的 sync 校验失败。
+- **Python 3.10+**（依赖：`pip install -r assets/scripts/requirements.txt`）
+- **ENVI + SARscape**（已装则插件自动探测路径）
+- NASA Earthdata 账号（ASF 下载）
+- 用 GACOS 时需要邮箱 IMAP 授权码
 
-## 设置（settings → insar-genie）
+---
 
-- earthdataUser / earthdataPassword：ASF 凭证
-- gacosEmail / gacosImapAuthCode：GACOS 邮箱 + IMAP 授权码
-- enviIdl / sarscapeLib：ENVI/SARscape 路径（**启动时自动探测**，无需手填）
-- workDir / poeorbDir：数据目录（POEORB 默认 <实验目录>/poeorb；gacos/dem/slc 目录由实验目录管理）
-- scriptsDir：**脚本根（解耦）**——五步 bat 树 + config.env 的家；**留空 = 插件内置 assets/experiment（开箱即用）**。多实验共享一份脚本（串行跑），config.env 每次运行前重写
-- experimentDir：实验数据根（RESULT_ROOT/TMP_DIR 所在）；留空回退注册的 exp.dir。实验目录回归纯数据，无需复制 bat
-
-## 防呆铁律
-
-- 空间基线必须在 2-4%（`validateBaseline` 单一来源 `src/shared/baseline.ts`，host 与 client 共用；`insar_register` 写入前强制拦截 45% 事故）
-- 连接图必须校验（孤立景数 >4 → 扩基线 2%→4% 重跑，上限 4%）
-- 执行后校验 `tmp/*/work/PARAMETERS_INFO_*.xml` 实际落盘值 == 参数快照（`checkParamsConsistency`；缺证时 `passed=false, missingInfo=true`，不静默通过）
-
-## 状态
-
-- host 工具：✅ 可用（8 个）
-- client UI：✅ 已有（5 卡参数确认 PipelineConfirm / 参数确认卡 / 进度面板 / 设置卡 / 实验列表），走 `conversation.chat.turnTail` + `settings.section` 插槽
-- 构建：`npm run build`（tsc host + tsdown client）；测试 `npm test`（vitest **122 用例**）
-- CI：`.github/workflows/test.yml`（build + vitest + 两仓脚本同步校验；push 到 main 触发）
-- 发布：`npm publish --access public`（scoped 包；`prepack`/`prepublishOnly` 自动 build）
+*开发/发布信息见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。*
