@@ -57,6 +57,9 @@ export interface ExperimentParams {
   radius: number;                  // 精炼半径
   refinePolyDegree: number;        // 精炼残差多项式阶
   geocodeGridSize: number;         // 地理编码网格（与多视匹配）
+  /** 地理编码精度阈值（D2：卡片可配，bat 固化 30 默认；论文标准 5m/8mm） */
+  precisionHeightThr?: number;     // 高程精度阈值 m（可选）
+  precisionVelocityThr?: number;   // 速度精度阈值 mm/y（可选）
   useGacos: boolean;
   demFile: string;
   /** 连接图中央超参考（SLC msc_slc_list 完整路径）；空 = 走 bat 内置兑底（历史民勤清单，仅适用同类数据） */

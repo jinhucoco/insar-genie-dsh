@@ -466,8 +466,12 @@ def main():
         time.sleep(2)
 
     log(f"=== 完成: 成功 {ok} / 失败 {fail} / 跳过 {skip} ===", logfile)
-    # 任务完成标记（配合守护脚本防无限重启；仅完整跑完清单时写）
-    if completed:
+    # 任务完成标记（配合守护脚本防无限重启；仅完整跑完清单【且无失败】才写）
+    # 2026-08-30 D1 修复：原逻辑 `if completed:` 只看"是否跑完整张清单"，
+    # 网络差时大量 FAIL 也写 complete.flag → run_dl/守护误判"全部完成"停止拉取，
+    # 实际丢文件（实测 成功3/失败131 也写 flag，131 景丢失）。
+    # 正确语义：有失败文件 = 任务未真正完成，不写 flag，让守护/run_dl 继续补下。
+    if completed and fail == 0:
         try:
             cf = os.path.join(args.out, "complete.flag")
             with open(cf, "w", encoding="utf-8") as f:
@@ -475,6 +479,11 @@ def main():
             log(f"[DONE] 任务完成，写入标记: {cf}", logfile)
         except Exception:
             pass
+    elif fail > 0:
+        log(
+            f"[NOTE] 存在 {fail} 个失败文件，不写 complete.flag（待守护/run_dl 续跑补下）",
+            logfile,
+        )
 
 
 if __name__ == "__main__":

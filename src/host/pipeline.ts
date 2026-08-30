@@ -194,14 +194,26 @@ export function buildPipelineCards(exp: {
     { field: "RADIUS", label: "Refinement Radius (m)", defaultValue: def(22.5), recommended: rec(exp.params.radius), reason: "精炼半径" },
   ];
 
-  // 卡⑤ 地理编码（输出网格与多视匹配）
+  // 卡⑤ 地理编码（输出网格与多视匹配；字段与 run_geocode.bat 固化 23 参数对齐，
+  // 2026-08-30 D2 修复：原仅 5 字段，用户反馈"地理编码设置项太少"）
   const gridded = looks.rgLooks >= 8 || looks.azLooks >= 2 ? 30 : 15;
+  const grid = rec(exp.params.geocodeGridSize || gridded);
   const geocode = [
-    { field: "GEOCODE_RG_GRID_SIZE", label: "X Dimension (m)", defaultValue: def(15), recommended: rec(exp.params.geocodeGridSize || gridded), reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
-    { field: "GEOCODE_AZ_GRID_SIZE", label: "Y Dimension (m)", defaultValue: def(15), recommended: rec(exp.params.geocodeGridSize || gridded), reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
-    { field: "COHERENCE_THR", label: "Product Temporal Coherence Threshold", defaultValue: def(0.1), recommended: def(0.1), reason: "" },
+    { field: "GEOCODE_RG_GRID_SIZE", label: "X Dimension (m)", defaultValue: def(15), recommended: grid, reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
+    { field: "GEOCODE_AZ_GRID_SIZE", label: "Y Dimension (m)", defaultValue: def(15), recommended: grid, reason: `与多视匹配（${looks.rgLooks}:${looks.azLooks}→${gridded}m）` },
+    { field: "GEOCODE_ORBIT_INTERPOL", label: "Orbit Interpolation (s)", defaultValue: def(10), recommended: "10", reason: "轨道内插间隔" },
+    { field: "PRECISION_HEIGHT_THR", label: "Precision Height Threshold (m)", defaultValue: def(30), recommended: rec(exp.params.precisionHeightThr ?? 30), reason: "高程精度阈值（论文标准 5m 严格，30m 宽松）" },
+    { field: "PRECISION_VELOCITY_THR", label: "Precision Velocity Threshold (mm/y)", defaultValue: def(30), recommended: rec(exp.params.precisionVelocityThr ?? 30), reason: "速度精度阈值（论文标准 8mm/y 严格，30 宽松）" },
+    { field: "COHERENCE_THR", label: "Product Temporal Coherence Threshold", defaultValue: def(0.1), recommended: rec(exp.params.coherenceThreshold ?? 0.1), reason: "时间相干阈值（0.1-0.3 平衡点密度与质量）" },
+    { field: "WATER_BODY_MASK_DB", label: "Water Body Mask (dB)", defaultValue: def(0), recommended: "0", reason: "水体掩膜阈值" },
+    { field: "GENERATE_LOS_FLAG", label: "Generate LOS Displacement", defaultValue: "OK", recommended: "OK", reason: "视线向形变" },
+    { field: "GENERATE_VERTICAL_FLAG", label: "Generate Vertical Displacement", defaultValue: "NotOK", recommended: "NotOK", reason: "垂直投影（需入射角，可选）" },
     { field: "GENERATE_RASTER", label: "Make Geocoded Raster", defaultValue: "OK", recommended: "OK", reason: "" },
     { field: "GENERATE_SHAPE", label: "Make Geocoded Shape", defaultValue: "OK", recommended: "OK", reason: "" },
+    { field: "SHAPE_TIME_SERIES", label: "Make Shape Time Series", defaultValue: "NotOK", recommended: "OK", reason: "时间序列矢量" },
+    { field: "OCS_STATE", label: "Cartographic System State", defaultValue: "GEO-GLOBAL", recommended: "GEO-GLOBAL", reason: "输出投影系" },
+    { field: "OCS_PROJECTION", label: "Projection", defaultValue: "GEO", recommended: "GEO", reason: "GEO=经纬度；可选 UTM（需指定 Zone）" },
+    { field: "OCS_ELLIPSOID", label: "Ellipsoid", defaultValue: "WGS84", recommended: "WGS84", reason: "" },
   ];
 
   // 每张卡的 params 注入 key（= field，供 client 编辑时定位唯一参数）。

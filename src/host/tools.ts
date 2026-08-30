@@ -9,6 +9,7 @@ import { runPython } from "./runner.js";
 import { resolveScriptsDir, resolveExperimentDir, hasBundledScripts, resolveCgDir } from "./paths.js";
 import { writeConfigEnv, type ConfigEnvInput } from "./configenv.js";
 import { checkConnectionGraph, checkParamsConsistency, buildParamsSnapshot, buildPipelineCards, type PipelineCard } from "./pipeline.js";
+import { withAuxiliary } from "./probe.js";
 import type { Experiment, ExperimentParams, TerrainType } from "../shared/types.js";
 
 /** settings 的值对象形状（与 SettingsSchema resolve 后的字段对齐，避免 schemastery 携带类型） */
@@ -329,7 +330,8 @@ export function registerTools(
         slcData: exp.dataDirs.slc || join(s.workDir, "slc"),
         demFinal: exp.dataDirs.dem || "",
         enviIdl: s.enviIdl,
-        sarscapeLib: s.sarscapeLib,
+        // D5: 统一规范化到 auxiliary 级（用户手填 SARscape 根或缺 \auxiliary 时,config.env 直接可用）
+        sarscapeLib: withAuxiliary(s.sarscapeLib),
         gacosList: join(expDataDir, "gacos_list.txt"),
         sarModules: join(expDataDir, "sar_modules.txt"),
         maxPercBaseline: exp.params?.maxPercBaseline ?? 2,
