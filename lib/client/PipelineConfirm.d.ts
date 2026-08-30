@@ -17,6 +17,6 @@ export interface PipelineCard {
  */
 export declare function PipelineConfirm(props: {
     cards: PipelineCard[];
-    onConfirmAll: () => void;
+    onConfirmAll: (edits: Record<string, string>) => void;
     onCancel: () => void;
 }): ReactNode;

@@ -360,9 +360,10 @@ export function registerTools(
       confirmMode: { type: "string", description: "'manual' (default) returns pipeline.cards for user confirmation (B1 confirm-then-run). 'auto' skips confirmation and runs directly with template recommended values (still enforces 2% baseline iron rule)." },
       confirmed: { type: "boolean", description: "Phase 2 flag: true executes the pipeline after the user confirmed the cards; false/omitted returns the confirm cards (B1)." },
       ignoreInconsistency: { type: "boolean", description: "If true, proceed despite a PARAMETERS_INFO mismatch (default false = abort on mismatch)." },
+      paramOverrides: { type: "string", description: "(D2) JSON string of user-edited card values from the confirm UI, e.g. '{\"MAX_PERC_BASELINE\":\"4\",\"MAX_TIME_BASELINE\":\"120\"}'. Applied to config.env before execution. AI parses and passes these when user modified fields on the cards." },
     },
     output: JSON_OUTPUT,
-    async execute(input: { experimentId: string; confirmMode?: string; confirmed?: boolean; ignoreInconsistency?: boolean }) {
+    async execute(input: { experimentId: string; confirmMode?: string; confirmed?: boolean; ignoreInconsistency?: boolean; paramOverrides?: string }) {
       const exp = deps.registry.get(input.experimentId);
       if (!exp) throw new Error(`experiment not found: ${input.experimentId}`);
       const s = deps.settings?.get();
@@ -374,6 +375,30 @@ export function registerTools(
       const expDataDir = s.experimentDir && s.experimentDir.trim() ? s.experimentDir : exp.dir;
       const scriptRoot = resolveExperimentDir();
       const tmpDir = join(expDataDir, "tmp");
+      // (D2) 应用用户修改的卡片值(paramOverrides JSON 字符串)到 config.env 关键字段
+      // 支持: MAX_PERC_BASELINE / MIN_PERC_BASELINE / MAX_TIME_BASELINE / MIN_TIME_BASELINE(数值)
+      let ov: Record<string, string> = {};
+      if (input.paramOverrides) {
+        try {
+          const parsed = JSON.parse(input.paramOverrides);
+          if (parsed && typeof parsed === "object") ov = parsed as Record<string, string>;
+        } catch {
+          /* 非法 JSON 忽略,走默认 */
+        }
+      }
+      const ovNum = (k: string): number | undefined => {
+        const v = ov[k];
+        if (v === undefined || v === "") return undefined;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const ovMaxPerc = ovNum("MAX_PERC_BASELINE");
+      const ovMaxTime = ovNum("MAX_TIME_BASELINE");
+      // 基线防呆: 用户改的 MAX_PERC_BASELINE 也必须落在 2-4% 铁律区间(与 buildPipelineCards 一致)
+      const clampedPerc =
+        ovMaxPerc !== undefined
+          ? Math.min(4, Math.max(0, ovMaxPerc)) as number
+          : (exp.params?.maxPercBaseline ?? 2);
       const baseEnv: ConfigEnvInput = {
         workDir: s.workDir,
         resultRoot: expDataDir,
@@ -385,8 +410,8 @@ export function registerTools(
         sarscapeLib: withAuxiliary(s.sarscapeLib),
         gacosList: join(expDataDir, "gacos_list.txt"),
         sarModules: join(expDataDir, "sar_modules.txt"),
-        maxPercBaseline: exp.params?.maxPercBaseline ?? 2,
-        maxTimeBaselineDays: exp.params?.maxTimeBaselineDays ?? 180,
+        maxPercBaseline: clampedPerc,
+        maxTimeBaselineDays: ovMaxTime ?? (exp.params?.maxTimeBaselineDays ?? 180),
         superReference: exp.params?.superReference ?? "",
       };
 
@@ -420,7 +445,8 @@ export function registerTools(
       };
 
       // ② 连接图 + 校验门（孤立景数>4 → 从 2% 扩到 4% 重跑，铁律上限 4%，最多 3 次）。
-      let maxPercBaseline = exp.params?.maxPercBaseline ?? 2;
+      // (D2) 初始基线用 override 后的 clampedPerc（用户改的 MAX_PERC_BASELINE 生效）
+      let maxPercBaseline = clampedPerc;
       let cgCheck: ReturnType<typeof checkConnectionGraph> = {
         isolatedCount: 0,
         passed: false,

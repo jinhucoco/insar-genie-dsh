@@ -335,7 +335,7 @@ function PipelineConfirm(props) {
 		}, card.title)), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 			style: { marginTop: 10 },
 			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-				onClick: props.onConfirmAll,
+				onClick: () => props.onConfirmAll(edits),
 				style: {
 					marginRight: 8,
 					padding: "4px 12px"
@@ -1079,7 +1079,14 @@ function InsarTurnTail(props) {
 	const latest = latestInsarStatus(snapshot?.nodes);
 	if (props.matched?.pipeline) return (0, react.createElement)(PipelineConfirm, {
 		cards: props.matched.pipeline.cards,
-		onConfirmAll: () => {},
+		onConfirmAll: (edits) => {
+			const changed = Object.entries(edits ?? {}).filter(([, v]) => v !== void 0 && v !== "");
+			if (changed.length === 0) return;
+			const summary = changed.map(([k, v]) => `${k}=${v}`).join(", ");
+			console.info(`[insar-genie] 用户修改参数: ${summary}`);
+			const ev = new CustomEvent("insar-genie-params-changed", { detail: { edits } });
+			window.dispatchEvent(ev);
+		},
 		onCancel: () => {}
 	});
 	if (props.matched?.paramConfirm) return (0, react.createElement)(ParamConfirm, {

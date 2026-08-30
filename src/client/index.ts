@@ -60,7 +60,19 @@ export function InsarTurnTail(props: {
   if (props.matched?.pipeline) {
     return createElement(PipelineConfirm, {
       cards: props.matched.pipeline.cards,
-      onConfirmAll: () => {},
+      // (D2) onConfirmAll 收到用户编辑的字段值；无 host 同步通道时,把修改摘要写成
+      // 可见文本提示 AI：用户改过参数,重调 insar_pipeline(confirmed=true, paramOverrides=<JSON>) 时带上。
+      // 这样即使 client 无法直接调 host,修改也能通过 AI 下一轮带参执行真正生效。
+      onConfirmAll: (edits: Record<string, string>) => {
+        const changed = Object.entries(edits ?? {}).filter(([, v]) => v !== undefined && v !== "");
+        if (changed.length === 0) return;
+        const summary = changed
+          .map(([k, v]) => `${k}=${v}`)
+          .join(", ");
+        console.info(`[insar-genie] 用户修改参数: ${summary}`);
+        const ev = new CustomEvent("insar-genie-params-changed", { detail: { edits } });
+        window.dispatchEvent(ev);
+      },
       onCancel: () => {},
     });
   }

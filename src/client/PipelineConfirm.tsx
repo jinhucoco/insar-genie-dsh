@@ -20,7 +20,7 @@ export interface PipelineCard {
  */
 export function PipelineConfirm(props: {
   cards: PipelineCard[];
-  onConfirmAll: () => void;
+  onConfirmAll: (edits: Record<string, string>) => void;
   onCancel: () => void;
 }): ReactNode {
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -56,7 +56,7 @@ export function PipelineConfirm(props: {
       ))}
       <div style={{ marginTop: 10 }}>
         <button
-          onClick={props.onConfirmAll}
+          onClick={() => props.onConfirmAll(edits)}
           style={{ marginRight: 8, padding: "4px 12px" }}
         >
           全部确认
