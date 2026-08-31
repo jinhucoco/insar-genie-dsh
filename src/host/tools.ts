@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -412,7 +412,10 @@ export function registerTools(
         sarModules: join(expDataDir, "sar_modules.txt"),
         maxPercBaseline: clampedPerc,
         maxTimeBaselineDays: ovMaxTime ?? (exp.params?.maxTimeBaselineDays ?? 180),
-        superReference: exp.params?.superReference ?? "",
+        // (D13) 超参考自动发现: 用户未显式指定时,从 SLC 数据目录自动选一个导入产物
+        // (*_msc_slc_list 优先,回退 *_slc_list)。解决"换新研究区必改 SUPER_REFERENCE"痛点——
+        // 导入工具(insar_import_bulk)产出的 msc_slc_list 即连接图的输入。
+        superReference: exp.params?.superReference || detectSuperReference(slcDataDir(s, exp)),
       };
 
       // 先写一次 config.env 到脚本根（无论确认与否都生成）。
@@ -548,6 +551,38 @@ async function defaultRunStep(
     throw new Error(`insar_pipeline failed (${step}, exit ${r.exitCode}): ${r.stderr}`);
   }
   return { ok: true, step };
+}
+
+/** SLC 数据目录：注册的 slcDir > settings.workDir/slc（D13 超参考自动发现用） */
+function slcDataDir(s: SettingsValue | undefined, exp: Experiment): string {
+  if (exp.dataDirs?.slc) return exp.dataDirs.slc;
+  if (s?.workDir) return join(s.workDir, "slc");
+  return "";
+}
+
+/** 自动发现 SLC 导入产物作为连接图超参考（D13）：
+ *  - 优先 *_msc_slc_list（双帧拼接产物）,回退 *_slc_list（单帧产物）
+ *  - 取目录下第一个（按修改时间排序取最新?——连接图需要全部时相,但超参考只是中心参考,
+ *    取任意一个导入产物即可;按文件名排序取中间时相更接近"中央"）
+ */
+function detectSuperReference(slcDir: string): string {
+  if (!slcDir || !existsSync(slcDir)) return "";
+  try {
+    const msc = readdirSync(slcDir)
+      .filter((f) => /_msc_slc_list$/.test(f) && !/\.(kml|shp|shx|dbf|prj|sml)$/.test(f))
+      .sort();
+    if (msc.length > 0) {
+      // 取中间时相(中央超参考),避免首尾时相偏差
+      return join(slcDir, msc[Math.floor(msc.length / 2)]);
+    }
+    const plain = readdirSync(slcDir)
+      .filter((f) => /_slc_list$/.test(f) && !/\.(kml|shp|shx|dbf|prj|sml)$/.test(f))
+      .sort();
+    if (plain.length > 0) return join(slcDir, plain[Math.floor(plain.length / 2)]);
+  } catch {
+    /* 目录读失败 -> 返回空走 bat 兜底 */
+  }
+  return "";
 }
 
 /** 执行 Windows batch（cmd /c），捕获输出（SARscape 步骤可能是长任务） */
