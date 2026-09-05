@@ -1,8 +1,9 @@
 import { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-/** 设置命名空间：须用 settingsNamespace() 工厂创建（Branded 类型）；
- *  dsh-settings 校验 /^[a-z][a-z0-9-]*$/，必须是小写 kebab-case（"insarGenie" 会抛 TypeError） */
-export declare const SETTINGS_NS: import("@deepseek-ai/dsh-settings").SettingsNamespace;
+/** 设置命名空间：0.1.2 起 settingsNamespace() 工厂已移除，改为字符串字面量
+ *  （SettingsNamespaceInput 模板字面量类型校验 /^[a-z][a-z0-9-]*$/，
+ *  必须是小写 kebab-case，"insarGenie" 会抛 TypeError）。 */
+export declare const SETTINGS_NS = "insar-genie";
 /** 设置项 schema（enviIdl/sarscapeLib 的默认值是兜底；实际值由 probeDefaults 在 base 层覆盖） */
 export declare const SettingsSchema: z<Schemastery.ObjectS<{
     earthdataUser: z<string, string>;
@@ -40,10 +41,10 @@ export declare const SettingsSchema: z<Schemastery.ObjectS<{
 export type Settings = ReturnType<typeof SettingsSchema>;
 /**
  * 注册设置命名空间。
- * 注意：installSettingsSection 签名是 5 参数
- *   installSettingsSection<T>(ctx, ns, schema, entry, hooks)
- * 其中 ns 必须是 settingsNamespace() 的返回值；entry 是默认值实例（composition 层 base 值）；
- * hooks 提供 setSource/onChange（可空实现）。
+ * 0.1.2 起 installSettingsSection 独立导出被移除：改为在注入 settings 服务后
+ * 调 settingsCtx.settings.installSection(ctx, ns, schema, entry, hooks)
+ * （官方 dsh-bash-local / dsh-llm-deepseek 同款模式；installSection 仍为 5 参数，
+ * ns 为字符串字面量，entry 是 composition 层 base 值，hooks 提供 setSource/onChange）。
  *
  * 启动时路径探测：探测结果作为 entry（base 层）填入，用户设置的 user 层仍能覆盖，
  * 普通用户无需手动填 ENVI IDL / SARscape 路径。

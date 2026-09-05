@@ -33,14 +33,13 @@ declare global {
     }
 }
 /** turnTail 组件（chain 注册，session 作用域）：
- * - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据优先**
- * - useSession：框架注入的会话快照选择器——仅用于对"本 turn 已有 insar_status 活动"的
- *   实验做实时刷新（AI 在同一实验上再次调用 insar_status 时面板自动更新）。
- *   不做跨 turn 泄漏：其他 turn 的 insar 活动由它们自己的 turnTail 渲染。
+ * - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据**
+ * - 0.1.2 起 turnTail owner 注入面不再提供 useSession 会话快照选择器（旧 ConversationSnapshot 读取
+ *   已随 dsh-client-runtime 拆包移除）；实时刷新改由 matched 承担——同一 turn 内 AI 再次调用
+ *   insar_status → buildLocationData 重新发布 turn 数据 → select 重认领 → matched 重传 → 面板更新。
  */
 export declare function InsarTurnTail(props: {
     matched: InsarTurnData;
-    useSession: (selector: (s: unknown) => unknown) => unknown;
 }): ReturnType<typeof createElement> | null;
 /**
  * SettingsCardBound：绑定 settingsScope 的容器组件。

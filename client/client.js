@@ -5,7 +5,6 @@ window.__ModuleLoader__.load({ id: "@jinhucoco/insar-genie-dsh", factory: (requi
 Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 let react = require("react");
 let react_jsx_runtime = require("react/jsx-runtime");
-let _deepseek_ai_dsh_client_runtime_client = require("@deepseek-ai/dsh-client-runtime/client");
 
 //#region src/shared/baseline.ts
 /**
@@ -863,6 +862,17 @@ function DirectoryBrowserModal(props) {
 
 //#endregion
 //#region src/client/conversation.ts
+/**
+* 0.1.2 起旧 dsh-client-runtime 拆包：isAppendSurfaceEvent 的运行时实现仍在
+* @deepseek-ai/dsh-session（lib/types/surface.js），但其 /types 精简面未暴露该导出
+* （上游导出瑕疵，ui-chat 仅运行时 re-export、类型也未暴露）。事件契约稳定
+* （surfaceOp === 'append'），这里本地实现等价判断，避免依赖平台入口——
+* 也免去 client bundle 对 dsh-session 的运行时依赖。
+*/
+function isAppendSurfaceEvent(event) {
+	const e = event;
+	return e.type === "tool/result" && e.surfaceOp === "append";
+}
 /** 本 Definition 关注的 insar 工具名 */
 const INSAR_TOOLS = /* @__PURE__ */ new Set([
 	"insar_status",
@@ -905,7 +915,7 @@ const insarGenieDefinition = {
 			id: String(event.data.turn),
 			role: "update"
 		};
-		if (event.type === "tool/result" && (0, _deepseek_ai_dsh_client_runtime_client.isAppendSurfaceEvent)(event)) return {
+		if (event.type === "tool/result" && isAppendSurfaceEvent(event)) return {
 			id: String(event.data.turn),
 			role: "update"
 		};
@@ -997,34 +1007,6 @@ function selectInsarTurn(owner) {
 	if (!data.status && !data.experiments && !data.registered && !data.paramConfirm && !data.pipeline) return null;
 	return data;
 }
-/**
-* 从 ConversationSnapshot 提取最新一次 insar_status 的结构化结果。
-* 这是 host→client 的真实数据通道：host 工具结果经会话事件流到达 client，
-* 组件订阅快照即可实时显示，无需 window 桥、无需 30s 轮询。
-* @param nodes - snapshot.nodes（legacy 兼容字段，所有已物化会话节点）
-* @returns 最新 insar_status 结果 + 工具调用参数里的 experimentId（可作标签），无则 null
-*/
-function latestInsarStatus(nodes) {
-	if (!nodes || nodes.length === 0) return null;
-	let latest = null;
-	for (const node of nodes) {
-		if (node?.kind !== "tool-result") continue;
-		if (node.call?.name !== "insar_status") continue;
-		if (!latest || (node.seq ?? 0) >= (latest.seq ?? 0)) latest = node;
-	}
-	if (!latest) return null;
-	const json = parseToolResultJson(latest.content);
-	if (!isProgressSnapshot(json)) return null;
-	let experimentId;
-	try {
-		const args = JSON.parse(latest.call?.argsRaw ?? "{}");
-		if (typeof args.experimentId === "string") experimentId = args.experimentId;
-	} catch {}
-	return {
-		status: json,
-		experimentId
-	};
-}
 function isProgressSnapshot(v) {
 	return typeof v === "object" && v !== null && typeof v.stepIndex === "number" && typeof v.progressLabel === "string";
 }
@@ -1064,19 +1046,18 @@ function isPipelineCards(v) {
 const name = "insar-genie-dsh";
 const inject = [
 	"slots",
-	"conversationEvents",
+	"uiConversation",
 	"settingsScope",
 	"workspaces"
 ];
 /** turnTail 组件（chain 注册，session 作用域）：
-* - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据优先**
-* - useSession：框架注入的会话快照选择器——仅用于对"本 turn 已有 insar_status 活动"的
-*   实验做实时刷新（AI 在同一实验上再次调用 insar_status 时面板自动更新）。
-*   不做跨 turn 泄漏：其他 turn 的 insar 活动由它们自己的 turnTail 渲染。
+* - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据**
+* - 0.1.2 起 turnTail owner 注入面不再提供 useSession 会话快照选择器（旧 ConversationSnapshot 读取
+*   已随 dsh-client-runtime 拆包移除）；实时刷新改由 matched 承担——同一 turn 内 AI 再次调用
+*   insar_status → buildLocationData 重新发布 turn 数据 → select 重认领 → matched 重传 → 面板更新。
 */
 function InsarTurnTail(props) {
-	const snapshot = props.useSession((s) => s);
-	const latest = latestInsarStatus(snapshot?.nodes);
+	const latest = props.matched;
 	if (props.matched?.pipeline) return (0, react.createElement)(PipelineConfirm, {
 		cards: props.matched.pipeline.cards,
 		onConfirmAll: (edits) => {
@@ -1096,7 +1077,6 @@ function InsarTurnTail(props) {
 		onCancel: () => {}
 	});
 	if (props.matched?.status) return (0, react.createElement)(ProgressPanel, {
-		experimentId: latest?.experimentId,
 		experimentLabel: void 0,
 		fetchStatus: window.insarGenieBridge?.fetchStatus,
 		initial: props.matched.status,
@@ -1159,7 +1139,7 @@ function SettingsCardBound(props) {
 	});
 }
 function apply(ctx) {
-	ctx.conversationEvents.register(insarGenieDefinition);
+	ctx.uiConversation.events.register(insarGenieDefinition);
 	const scope = ctx.settingsScope?.bind({ namespace: "insar-genie" });
 	ctx.slots.inject("settings.section", () => {
 		const off = ctx.slots.register({

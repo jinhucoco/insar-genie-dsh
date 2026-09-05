@@ -1,8 +1,10 @@
-import type { ConversationNodeDefinition, TurnLocation } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ConversationNodeDefinition, TurnLocation } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { ProgressSnapshot } from "./shared.js";
 import type { PipelineCard } from "./PipelineConfirm.js";
-/** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式） */
-declare module "@deepseek-ai/dsh-client-runtime/client" {
+/** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式）
+ *  0.1.2 起 dsh-client-runtime 被拆包移除，ConversationTurnDataMap 归属
+ *  @deepseek-ai/dsh-client-ui-conversation/client（ui-chat / ui-deliverables 同款）。 */
+declare module "@deepseek-ai/dsh-client-ui-conversation/client" {
     interface ConversationTurnDataMap {
         "insar-genie": InsarTurnData;
     }

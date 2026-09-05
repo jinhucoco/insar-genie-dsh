@@ -4,13 +4,26 @@ import type {
   ConversationNodeContext,
   ConversationNodeDefinition,
   TurnLocation,
-} from "@deepseek-ai/dsh-client-runtime/client";
-import { isAppendSurfaceEvent } from "@deepseek-ai/dsh-client-runtime/client";
+} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { ProgressSnapshot } from "./shared.js";
 import type { PipelineCard } from "./PipelineConfirm.js";
 
-/** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式） */
-declare module "@deepseek-ai/dsh-client-runtime/client" {
+/**
+ * 0.1.2 起旧 dsh-client-runtime 拆包：isAppendSurfaceEvent 的运行时实现仍在
+ * @deepseek-ai/dsh-session（lib/types/surface.js），但其 /types 精简面未暴露该导出
+ * （上游导出瑕疵，ui-chat 仅运行时 re-export、类型也未暴露）。事件契约稳定
+ * （surfaceOp === 'append'），这里本地实现等价判断，避免依赖平台入口——
+ * 也免去 client bundle 对 dsh-session 的运行时依赖。
+ */
+function isAppendSurfaceEvent(event: unknown): boolean {
+  const e = event as { type?: string; surfaceOp?: string };
+  return e.type === "tool/result" && e.surfaceOp === "append";
+}
+
+/** 把 insar turn 数据合并进引擎的 turn 级业务数据表（deliverables/turn-tail 同款模式）
+ *  0.1.2 起 dsh-client-runtime 被拆包移除，ConversationTurnDataMap 归属
+ *  @deepseek-ai/dsh-client-ui-conversation/client（ui-chat / ui-deliverables 同款）。 */
+declare module "@deepseek-ai/dsh-client-ui-conversation/client" {
   interface ConversationTurnDataMap {
     "insar-genie": InsarTurnData;
   }

@@ -27,7 +27,7 @@ import type { ParamSnapshot, ProgressSnapshot, TerrainType } from "./shared.js";
  */
 export const name = "insar-genie-dsh";
 
-export const inject = ["slots", "conversationEvents", "settingsScope", "workspaces"];
+export const inject = ["slots", "uiConversation", "settingsScope", "workspaces"];
 
 /** host 侧注入的运行时桥（可选；无则走会话快照提取） */
 declare global {
@@ -40,20 +40,13 @@ declare global {
 }
 
 /** turnTail 组件（chain 注册，session 作用域）：
- * - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据优先**
- * - useSession：框架注入的会话快照选择器——仅用于对"本 turn 已有 insar_status 活动"的
- *   实验做实时刷新（AI 在同一实验上再次调用 insar_status 时面板自动更新）。
- *   不做跨 turn 泄漏：其他 turn 的 insar 活动由它们自己的 turnTail 渲染。
+ * - matched：selectInsarTurn 的返回（该 turn 有 insar 工具活动才认领）——**本 turn 数据**
+ * - 0.1.2 起 turnTail owner 注入面不再提供 useSession 会话快照选择器（旧 ConversationSnapshot 读取
+ *   已随 dsh-client-runtime 拆包移除）；实时刷新改由 matched 承担——同一 turn 内 AI 再次调用
+ *   insar_status → buildLocationData 重新发布 turn 数据 → select 重认领 → matched 重传 → 面板更新。
  */
-export function InsarTurnTail(props: {
-  matched: InsarTurnData;
-  useSession: (selector: (s: unknown) => unknown) => unknown;
-}): ReturnType<typeof createElement> | null {
-  // session 作用域插槽恒注入 useSession（SessionStandardProps），直接调用（规则-of-hooks）
-  const snapshot = props.useSession((s: unknown) => s) as
-    | { nodes?: readonly { kind?: string; seq?: number; call?: { name?: string; argsRaw?: string } | null; content?: readonly unknown[] }[] }
-    | undefined;
-  const latest = latestInsarStatus(snapshot?.nodes);
+export function InsarTurnTail(props: { matched: InsarTurnData }): ReturnType<typeof createElement> | null {
+  const latest = props.matched;
 
   // 0) 全流程参数确认卡：insar_pipeline 的 5 卡结果（manual 模式一次性推送）。
   //    优先于其他分支：AI 发起全流程编排时先让用户确认 5 步参数再执行。
@@ -91,11 +84,11 @@ export function InsarTurnTail(props: {
   // 2) 进度面板：仅当**本 turn** 有 insar_status 活动时渲染（matched.status 是本 turn 的
   //    最后结果）。快照 latest 只作为同一实验的实时刷新值——通过 snapshot prop 传入，
   //    快照更新会重渲染并更新面板（initial 只挂载生效，不能承担实时刷新）。
+  //    0.1.2 下 latest 即 matched（select 重注入），语义等同快照刷新。
   //    无 matched.status 时不渲染进度面板，避免历史 turn 的 insar_status 泄漏压制
   //    本 turn 的 experiments/registered 分支。
   if (props.matched?.status) {
     return createElement(ProgressPanel, {
-      experimentId: latest?.experimentId,
       experimentLabel: undefined,
       fetchStatus: window.insarGenieBridge?.fetchStatus,
       initial: props.matched.status,
@@ -185,8 +178,10 @@ export function SettingsCardBound(props: {
 }
 
 export function apply(ctx: any): void {
-  // 1) conversationEvents：累积 insar 工具结果到 turn 业务数据
-  ctx.conversationEvents.register(insarGenieDefinition);
+  // 1) uiConversation：累积 insar 工具结果到 turn 业务数据
+  //    0.1.2 起旧 conversationEvents 服务随 dsh-client-runtime 拆包移除，
+  //    改由 ctx.uiConversation.events.register（官方 ui-deliverables 同款）
+  ctx.uiConversation.events.register(insarGenieDefinition);
 
   // 2) settings.section：设置卡片（设置页插件区，list + root scope）
   //    通过 ctx.settingsScope 绑定 "insar-genie" namespace，读/写 host 设置值
