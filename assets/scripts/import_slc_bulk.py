@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """SLC 批量导入驱动 —— 按下行清单按"时相(日期)"分组,每组调一次 ImportSentinel1Format。
 
 设计原则(2026-08-30 minqin2 实测 + SARscape 官方文档):
@@ -31,12 +30,14 @@ import sys
 import time
 from collections import OrderedDict
 
+
 def log(msg, logfile):
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
     print(line, flush=True)
     if logfile:
         with open(logfile, "a", encoding="utf-8") as f:
             f.write(line + "\n")
+
 
 def group_by_date(rows, logfile):
     """按日期分组,组内校验同轨道;不同轨道拆组。返回 OrderedDict date -> [rows]"""
@@ -55,17 +56,25 @@ def group_by_date(rows, logfile):
         groups.setdefault(key, []).append(r)
     return groups
 
+
 def build_idl_cmd(zips, out_dir, aoi, pol, sar_lib, tmp_dir, date_label):
     """构造 ImportSentinel1Format 的 IDL 批处理命令(和 run_import_slc.bat 等价)。"""
     inp = "[" + ",".join(f"'{z}'" for z in zips) + "]"
     # 输出名: 与输入一一对应,out_dir/<zip名去掉扩展>(RENAME 规则会在其上补 sentinel1_135_... 吗?
     # 实测: 传具体输出名时,SARscape RENAME=OK 会自动重命名为 sentinel1_135_<日期>_..._slc_list;
     # 传目录则报 EC=70000。故按历史 bat: outs = out_dir + '/' + basename(zip, '.zip')
-    outs = "[" + ",".join(f"'{out_dir}/{os.path.splitext(os.path.basename(z))[0]}'" for z in zips) + "]"
+    outs = (
+        "["
+        + ",".join(f"'{out_dir}/{os.path.splitext(os.path.basename(z))[0]}'" for z in zips)
+        + "]"
+    )
     # ROI 分支单独构造,避免引号嵌套问题
     if aoi:
         roi_branch = (
-            "if strlen('" + aoi + "') gt 0 then c=o.SetParam(P+'INPUT_ROI_FILE','" + aoi
+            "if strlen('"
+            + aoi
+            + "') gt 0 then c=o.SetParam(P+'INPUT_ROI_FILE','"
+            + aoi
             + "') else c=1 & printf,u,'SETROI:',byte(c) & "
         )
     else:
@@ -99,13 +108,18 @@ def build_idl_cmd(zips, out_dir, aoi, pol, sar_lib, tmp_dir, date_label):
         "r=o.Execute() & printf,u,'EXECUTE:',byte(r) & "
         "free_lun,u & exit"
     ) % (
-        sar_lib, sar_lib, sar_lib, tmp_dir, out_dir.replace("\\", "/") + "/sar_modules_" + date_label + ".txt",
+        sar_lib,
+        sar_lib,
+        sar_lib,
+        tmp_dir,
+        out_dir.replace("\\", "/") + "/sar_modules_" + date_label + ".txt",
         inp,
         roi_branch,
         outs,
         pol,
     )
     return idl
+
 
 def run_one(env_idl, zips, out_dir, aoi, pol, sar_lib, tmp_dir, date_label, workdir, logfile):
     """为一个时相(组)执行导入;返回 (ok, sarbatch_path)。"""
@@ -135,6 +149,7 @@ def run_one(env_idl, zips, out_dir, aoi, pol, sar_lib, tmp_dir, date_label, work
         log(f"[ERR] {date_label}: {ex}", logfile)
         return False, sarbatch
 
+
 def main():
     ap = argparse.ArgumentParser(description="SLC 批量导入(按时相分组,通用)")
     ap.add_argument("--list", required=True, help="清单 CSV (date,frame,orbit,satellite,file)")
@@ -142,7 +157,9 @@ def main():
     ap.add_argument("--out", required=True, help="导入输出目录")
     ap.add_argument("--aoi", default="", help="研究区 shp(可选,AOI 裁剪 burst)")
     ap.add_argument("--pol", default="ONLY_VV_POL", help="极化(默认 ONLY_VV_POL)")
-    ap.add_argument("--envi-idl", default=r"C:\Program Files\Harris\ENVI56\IDL88\bin\bin.x86_64\envi_idl.exe")
+    ap.add_argument(
+        "--envi-idl", default=r"C:\Program Files\Harris\ENVI56\IDL88\bin\bin.x86_64\envi_idl.exe"
+    )
     ap.add_argument("--sarscape-lib", default=r"C:\Program Files\SARMAP SA\SARscape\auxiliary")
     ap.add_argument("--tmp", default="", help="临时目录(默认 <out>/tmp)")
     ap.add_argument("--threads", type=int, default=1, help="并行时相数(默认 1,顺序跑防锁冲突)")
@@ -187,8 +204,12 @@ def main():
         # 已完成跳过: 产物目录存在即视为完成(REBUILD_ALL=NotOK 语义)
         msc_glob_pattern = f"sentinel1_*{date_label}*_IW_D_VV*slc_list*"
         import glob as _glob
-        done = [p for p in _glob.glob(os.path.join(out_dir, msc_glob_pattern))
-                if not p.endswith((".kml", ".shp", ".shx", ".dbf", ".prj", ".sml"))]
+
+        done = [
+            p
+            for p in _glob.glob(os.path.join(out_dir, msc_glob_pattern))
+            if not p.endswith((".kml", ".shp", ".shx", ".dbf", ".prj", ".sml"))
+        ]
         if done:
             log(f"[SKIP] {key}: 已存在产物 {os.path.basename(done[0])},跳过", logfile)
             skipped += 1
@@ -202,18 +223,33 @@ def main():
         # 同一时相多个 zip:确认同轨道(组已按轨道拆过)
         date_label = key.replace("-", "")
         ok, sarbatch = run_one(
-            args.envi_idl, zips, out_dir, args.aoi, args.pol,
-            args.sarscape_lib, tmp_dir, date_label, workdir, logfile,
+            args.envi_idl,
+            zips,
+            out_dir,
+            args.aoi,
+            args.pol,
+            args.sarscape_lib,
+            tmp_dir,
+            date_label,
+            workdir,
+            logfile,
         )
         if ok:
             ok_count += 1
         else:
             fail_count += 1
             # 及时反馈失败,不盲目继续后续时相(常见原因是 SARscape 环境问题)
-            log(f"[NOTE] {date_label} 执行未确认成功,续跑请加 --skip {i+1} 或 --only-date {date_label}", logfile)
+            log(
+                f"[NOTE] {date_label} 执行未确认成功,续跑请加 --skip {i + 1} 或 --only-date {date_label}",
+                logfile,
+            )
 
-    log(f"[DONE] 完成 {ok_count} 成功 / {fail_count} 未确认 / {skipped} 跳过(已完成),共 {end_i - start_i} 时相", logfile)
+    log(
+        f"[DONE] 完成 {ok_count} 成功 / {fail_count} 未确认 / {skipped} 跳过(已完成),共 {end_i - start_i} 时相",
+        logfile,
+    )
     return 0 if fail_count == 0 else 2
+
 
 if __name__ == "__main__":
     sys.exit(main())
