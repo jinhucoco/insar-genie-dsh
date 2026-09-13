@@ -68,6 +68,30 @@ def walk_relative(src: Path, base: Path):
             rel = os.path.relpath(fp, base)
             yield Path(rel)
 
+def collect_pairs(skill_root: Path, plugin_root: Path) -> list[tuple[Path, Path]]:
+    """列出全部待比较的 (技能仓库源文件, 插件 assets 目标文件) 配对。
+
+    MAPPING 的一项既可能是目录（scripts/ experiment/）也可能是单个文件（SKILL.md）：
+      - 目录   → 递归其下全部普通文件，目标 = assets/<dest_rel>/<相对路径>
+      - 单文件 → 就是它自己，目标 = assets/<dest_rel>
+
+    注：旧版对每一项都无条件调 os.walk(src_base)，而 **os.walk 作用在文件上不产出任何东西**，
+    于是 ("SKILL.md", "SKILL.md") 这条映射被静默跳过 —— SKILL.md 的真实漂移从未被报告
+    （2026-09-12 实测：两仓 SKILL.md 内容已不同，脚本仍打印"✅ 全部一致"）。此处一并修复。
+    """
+    pairs: list[tuple[Path, Path]] = []
+    for dest_rel, src_rel in MAPPING:
+        src_base = skill_root / src_rel
+        dest_base = plugin_root / "assets" / dest_rel
+        if not src_base.exists():
+            continue
+        if src_base.is_file():
+            pairs.append((src_base, dest_base))
+            continue
+        for rel in walk_relative(src_base, src_base):
+            pairs.append((src_base / rel, dest_base / rel))
+    return pairs
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sync", action="store_true", help="从技能仓库同步（复制）到 assets，而非仅校验")
@@ -84,22 +108,14 @@ def main() -> int:
     print(f"  插件仓库: {plugin_root}\n")
 
     diffs = []
-    for dest_rel, src_rel in MAPPING:
-        src_base = skill_root / src_rel
-        dest_base = plugin_root / "assets" / dest_rel
-        if not src_base.exists():
-            print(f"  [skip] 技能仓库无 {src_rel}，跳过") 
-            continue
-        # 遍历技能仓库源所有文件（walk_relative 返回相对 src_base 的路径）
-        for src_file in walk_relative(src_base, src_base):
-            rel = src_file  # 已是相对路径
-            dest_file = dest_base / rel
-            # 技能仓库里的路径，对应到 dest rel 前缀
-            full_src = src_base / rel
-            if not dest_file.exists():
-                diffs.append((full_src, dest_file, "MISSING"))
-            elif md5(full_src) != md5(dest_file):
-                diffs.append((full_src, dest_file, "DIFF"))
+    for _dest_rel, src_rel in MAPPING:
+        if not (skill_root / src_rel).exists():
+            print(f"  [skip] 技能仓库无 {src_rel}，跳过")
+    for full_src, dest_file in collect_pairs(skill_root, plugin_root):
+        if not dest_file.exists():
+            diffs.append((full_src, dest_file, "MISSING"))
+        elif md5(full_src) != md5(dest_file):
+            diffs.append((full_src, dest_file, "DIFF"))
 
     if not diffs:
         print("✅ 全部一致：插件 assets 与技能仓库脚本无漂移")
@@ -123,18 +139,12 @@ def main() -> int:
         print(f"  ✓ {os.path.relpath(src, skill_root)}")
     print(f"\n✅ 已同步 {synced} 个文件到插件 assets")
 
-    # 校验同步后是否一致
-    remain = 0
-    for dest_rel, src_rel in MAPPING:
-        src_base = skill_root / src_rel
-        dest_base = plugin_root / "assets" / dest_rel
-        if not src_base.exists():
-            continue
-        for src_file in walk_relative(src_base, src_base):
-            rel = src_file  # 已是相对路径
-            dest_file = dest_base / rel
-            if not dest_file.exists() or md5(dest_file) != md5(src_base / rel):
-                remain += 1
+    # 校验同步后是否一致（与上面同一套配对逻辑，避免两处口径漂移）
+    remain = sum(
+        1
+        for src, dest in collect_pairs(skill_root, plugin_root)
+        if not dest.exists() or md5(dest) != md5(src)
+    )
     if remain:
         print(f"⚠️  同步后仍有 {remain} 处不一致（检查技能仓库是否有未 copy 的目录）")
         return 1
